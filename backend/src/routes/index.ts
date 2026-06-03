@@ -21,15 +21,15 @@ router.get('/health', (_req, res) => {
 // Rotas de autenticacao (login publico; register/me protegidos internamente).
 router.use('/auth', authRoutes);
 
-// Rotas de negocio (autenticacao desabilitada temporariamente).
-router.use('/categories', categoriesRoutes);
-router.use('/products', productsRoutes);
-router.use('/customers', customersRoutes);
-router.use('/rentals', rentalsRoutes);
-router.use('/reservations', reservationsRoutes);
-router.use('/availability', availabilityRoutes);
-router.use('/dashboard', dashboardRoutes);
-router.use('/search', searchRoutes);
-router.use('/reports', reportsRoutes);
+// Rotas de negocio protegidas por JWT.
+router.use('/categories', authenticate, categoriesRoutes);
+router.use('/products', authenticate, productsRoutes);
+router.use('/customers', authenticate, customersRoutes);
+router.use('/rentals', authenticate, rentalsRoutes);
+router.use('/reservations', authenticate, reservationsRoutes);
+router.use('/availability', authenticate, availabilityRoutes);
+router.use('/dashboard', authenticate, dashboardRoutes);
+router.use('/search', authenticate, searchRoutes);
+router.use('/reports', authenticate, reportsRoutes);
 
 export default router;

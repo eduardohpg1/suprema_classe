@@ -8,8 +8,12 @@ export const setToken = (token: string): void =>
   localStorage.setItem(TOKEN_KEY, token);
 export const clearToken = (): void => localStorage.removeItem(TOKEN_KEY);
 
+const BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api';
+
 export const api = axios.create({
-  baseURL: '/api',
+  baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 

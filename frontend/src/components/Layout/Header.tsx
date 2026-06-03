@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search } from 'lucide-react';
+import { Menu, Search, LogOut } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
 
 interface HeaderProps {
@@ -9,7 +10,14 @@ interface HeaderProps {
 
 export function Header({ title, onMenuClick }: HeaderProps) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    toast.success('Sessão encerrada.');
+    // Recarrega a página para garantir limpeza completa do estado
+    window.location.href = '/login';
+  };
 
   const initials = (user?.name || 'U')
     .split(' ')
@@ -49,8 +57,17 @@ export function Header({ title, onMenuClick }: HeaderProps) {
             <p className="text-sm font-medium text-gray-900">
               {user?.name || 'Usuário'}
             </p>
-            <p className="text-xs text-gray-400">{user?.role || 'STAFF'}</p>
+            <p className="text-xs text-gray-400">
+              {user?.role === 'ADMIN' ? 'Administrador' : 'Operador'}
+            </p>
           </div>
+          <button
+            onClick={handleLogout}
+            title="Sair"
+            className="ml-1 flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </header>
