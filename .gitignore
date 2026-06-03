@@ -1,0 +1,33 @@
+# Dependências
+node_modules/
+**/node_modules/
+
+# Build
+dist/
+**/dist/
+build/
+
+# Ambiente — NUNCA subir credenciais
+.env
+**/.env
+!.env.example
+**/.env.local
+
+# Uploads locais
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Prisma gerado
+**/generated/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

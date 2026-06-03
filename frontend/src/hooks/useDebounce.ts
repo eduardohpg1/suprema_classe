@@ -1,0 +1,18 @@
+import { useEffect, useState } from 'react';
+
+/**
+ * Retorna uma versão "atrasada" do valor, atualizada apenas após `delay` ms
+ * sem mudanças. Útil para inputs de busca.
+ */
+export function useDebounce<T>(value: T, delay = 400): T {
+  const [debounced, setDebounced] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+
+  return debounced;
+}
+
+export default useDebounce;

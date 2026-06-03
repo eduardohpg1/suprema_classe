@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Uploads de fotos (mantem a pasta, ignora o conteudo)
+uploads/*
+!uploads/.gitkeep
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal

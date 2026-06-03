@@ -1,0 +1,156 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ProductStatus {
+  AVAILABLE
+  RESERVED
+  RENTED
+  MAINTENANCE
+}
+
+enum RentalStatus {
+  ACTIVE
+  RETURNED
+  OVERDUE
+  CANCELLED
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+// Usuario do sistema (autenticacao via JWT). Modelo minimo necessario para
+// suportar login/me exigidos pelas rotas de auth da missao.
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(STAFF)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Product {
+  id           String        @id @default(cuid())
+  code         String        @unique
+  name         String
+  categoryId   String
+  category     Category      @relation(fields: [categoryId], references: [id])
+  size         String
+  color        String
+  rentalPrice  Decimal       @db.Decimal(10, 2)
+  salePrice    Decimal?      @db.Decimal(10, 2)
+  notes        String?
+  status       ProductStatus @default(AVAILABLE)
+  photos       Photo[]
+  rentals      Rental[]
+  reservations Reservation[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([code])
+  @@index([status])
+  @@index([categoryId])
+}
+
+model Photo {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  filename  String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Customer {
+  id           String        @id @default(cuid())
+  name         String
+  cpf          String        @unique
+  rg           String?
+  phone        String
+  address      String?
+  notes        String?
+  rentals      Rental[]
+  reservations Reservation[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([cpf])
+  @@index([name])
+}
+
+model Rental {
+  id             String       @id @default(cuid())
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id])
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  pickupDate     DateTime
+  returnDate     DateTime
+  totalValue     Decimal      @db.Decimal(10, 2)
+  depositValue   Decimal      @db.Decimal(10, 2)
+  remainingValue Decimal      @db.Decimal(10, 2)
+  notes          String?
+  status         RentalStatus @default(ACTIVE)
+  contract       Contract?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([productId])
+  @@index([customerId])
+  @@index([pickupDate])
+  @@index([returnDate])
+  @@index([status])
+}
+
+model Reservation {
+  id         String            @id @default(cuid())
+  productId  String
+  product    Product           @relation(fields: [productId], references: [id])
+  customerId String
+  customer   Customer          @relation(fields: [customerId], references: [id])
+  date       DateTime
+  notes      String?
+  status     ReservationStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@index([productId])
+  @@index([customerId])
+  @@index([date])
+}
+
+model Contract {
+  id          String   @id @default(cuid())
+  rentalId    String   @unique
+  rental      Rental   @relation(fields: [rentalId], references: [id])
+  pdfPath     String?
+  generatedAt DateTime @default(now())
+}
