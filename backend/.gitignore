@@ -10,3 +10,6 @@ uploads/*
 # Prisma
 prisma/*.db
 prisma/*.db-journal
+
+# Banco PostgreSQL local embarcado (dados binarios, nao versionar)
+.pgdata/

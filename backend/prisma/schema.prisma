@@ -1,6 +1,8 @@
 // prisma/schema.prisma
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" para rodar local; "rhel-openssl-3.0.x" e o engine do runtime serverless da Vercel.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
