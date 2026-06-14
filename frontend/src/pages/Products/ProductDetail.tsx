@@ -19,7 +19,7 @@ import { Card } from '../../components/UI/Card';
 import { Spinner } from '../../components/UI/Spinner';
 import { Table, Column } from '../../components/UI/Table';
 import { productStatusConfig, rentalStatusConfig } from '../../lib/statusConfig';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDateOnly } from '../../lib/format';
 import { Rental } from '../../types';
 
 export function ProductDetail() {
@@ -54,12 +54,12 @@ export function ProductDetail() {
     {
       key: 'pickup',
       header: 'Retirada',
-      render: (r) => formatDate(r.pickupDate),
+      render: (r) => formatDateOnly(r.pickupDate),
     },
     {
       key: 'return',
       header: 'Devolução',
-      render: (r) => formatDate(r.returnDate),
+      render: (r) => formatDateOnly(r.returnDate),
     },
     {
       key: 'status',

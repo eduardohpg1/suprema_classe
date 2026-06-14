@@ -18,6 +18,7 @@ import { rentalStatusConfig } from '../../lib/statusConfig';
 import {
   formatCurrency,
   formatDate,
+  formatDateOnly,
   maskCPF,
   maskPhone,
 } from '../../lib/format';
@@ -117,8 +118,8 @@ export function RentalDetail() {
           </h3>
           <InfoRow label="Produto" value={rental.product?.name} />
           <InfoRow label="Código" value={rental.product?.code} />
-          <InfoRow label="Retirada" value={formatDate(rental.pickupDate)} />
-          <InfoRow label="Devolução" value={formatDate(rental.returnDate)} />
+          <InfoRow label="Retirada" value={formatDateOnly(rental.pickupDate)} />
+          <InfoRow label="Devolução" value={formatDateOnly(rental.returnDate)} />
         </Card>
 
         <Card className="md:col-span-2">
@@ -158,7 +159,7 @@ export function RentalDetail() {
         <Button onClick={() => generateContract(rental)}>
           <FileText className="h-4 w-4" /> Gerar Contrato PDF
         </Button>
-        <Button variant="outline" onClick={() => window.print()}>
+        <Button variant="outline" onClick={() => generateContract(rental, 'print')}>
           <Printer className="h-4 w-4" /> Imprimir
         </Button>
         {rental.status === 'ACTIVE' && (

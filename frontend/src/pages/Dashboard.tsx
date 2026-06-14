@@ -14,7 +14,7 @@ import { Table, Column } from '../components/UI/Table';
 import { Spinner } from '../components/UI/Spinner';
 import { Badge } from '../components/UI/Badge';
 import { Rental } from '../types';
-import { formatCurrency, formatDate } from '../lib/format';
+import { formatCurrency, formatDateOnly } from '../lib/format';
 import { rentalStatusConfig } from '../lib/statusConfig';
 
 interface MetricCardProps {
@@ -97,8 +97,8 @@ export function Dashboard() {
           onClick={() => navigate('/produtos?status=RENTED')}
         />
         <MetricCard
-          label="Reservas ativas"
-          value={data?.totalReserved ?? 0}
+          label="Locações ativas"
+          value={data?.rentals?.active ?? 0}
           accent="bg-yellow-100 text-yellow-600"
           icon={<CalendarClock className="h-6 w-6" />}
           onClick={() => navigate('/locacoes?status=ACTIVE')}
@@ -143,7 +143,7 @@ export function Dashboard() {
               {
                 key: 'returnDate',
                 header: 'Devolução',
-                render: (r) => formatDate(r.returnDate),
+                render: (r) => formatDateOnly(r.returnDate),
               },
             ]}
             data={data?.returnToday ?? []}

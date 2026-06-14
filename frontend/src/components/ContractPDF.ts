@@ -16,7 +16,15 @@ function num(v: number) {
 
 function d(v?: string) {
   if (!v) return '';
-  try { return format(parseISO(v), 'dd/MM/yyyy'); } catch { return ''; }
+  try {
+    // Retirada/devolução são datas sem hora (meia-noite UTC); formatamos pelos
+    // componentes UTC para não deslocar o dia pelo fuso local.
+    const date = parseISO(v);
+    if (Number.isNaN(date.getTime())) return '';
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    return `${day}/${month}/${date.getUTCFullYear()}`;
+  } catch { return ''; }
 }
 
 function parseAddr(raw?: string | null) {
@@ -42,7 +50,10 @@ function fieldLine(doc: jsPDF, label: string, value: string, x: number, y: numbe
 
 // ─── gerador principal ──────────────────────────────────────────────────────
 
-export function generateContract(rental: Rental): void {
+export function generateContract(
+  rental: Rental,
+  action: 'save' | 'print' = 'save',
+): void {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
   const PW  = 210;           // largura A4
@@ -395,9 +406,22 @@ export function generateContract(rental: Rental): void {
   ln(doc, rightCol, l6y + 19, npX + npW, l6y + 19);
   doc.text('Assinatura', rightCol + (npX + npW - rightCol) / 2 - doc.getTextWidth('Assinatura') / 2, l6y + 23);
 
-  // ── download ────────────────────────────────────────────────
+  // ── saída: imprimir ou baixar ───────────────────────────────
   const slug = (nome || 'cliente')
     .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+  if (action === 'print') {
+    // Abre o mesmo PDF do contrato já no diálogo de impressão do navegador.
+    doc.autoPrint();
+    const blobUrl = doc.output('bloburl');
+    const win = window.open(blobUrl, '_blank');
+    // Fallback: se o popup for bloqueado, baixa o PDF para impressão manual.
+    if (!win) {
+      doc.save(`contrato-${slug}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    }
+    return;
+  }
+
   doc.save(`contrato-${slug}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
 }
 

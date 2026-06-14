@@ -62,6 +62,10 @@ export interface DashboardData {
   totalRented: number;
   totalReserved: number;
   monthlyRevenue: number;
+  rentals: {
+    active: number;
+    overdue: number;
+  };
   pickupToday: Rental[];
   returnToday: Rental[];
 }

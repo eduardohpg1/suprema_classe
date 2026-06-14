@@ -22,7 +22,7 @@ import { Badge } from '../../components/UI/Badge';
 import { EmptyState } from '../../components/UI/EmptyState';
 import { Rental, RentalStatus } from '../../types';
 import { rentalStatusConfig } from '../../lib/statusConfig';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDateOnly } from '../../lib/format';
 
 export function RentalList() {
   const navigate = useNavigate();
@@ -65,12 +65,12 @@ export function RentalList() {
     {
       key: 'pickup',
       header: 'Retirada',
-      render: (r) => formatDate(r.pickupDate),
+      render: (r) => formatDateOnly(r.pickupDate),
     },
     {
       key: 'return',
       header: 'Devolução',
-      render: (r) => formatDate(r.returnDate),
+      render: (r) => formatDateOnly(r.returnDate),
     },
     {
       key: 'total',

@@ -20,7 +20,7 @@ import {
   RentalByPeriodRow,
   TopProductRow,
 } from '../types';
-import { formatCurrency, formatDate } from '../lib/format';
+import { formatCurrency, formatDateOnly } from '../lib/format';
 import { rentalStatusConfig } from '../lib/statusConfig';
 
 /** Exporta um array de objetos para CSV (compatível com Excel). */
@@ -94,12 +94,12 @@ export function Reports() {
     {
       key: 'pickup',
       header: 'Retirada',
-      render: (r) => formatDate(r.pickupDate),
+      render: (r) => formatDateOnly(r.pickupDate),
     },
     {
       key: 'return',
       header: 'Devolução',
-      render: (r) => formatDate(r.returnDate),
+      render: (r) => formatDateOnly(r.returnDate),
     },
     {
       key: 'value',
@@ -192,14 +192,14 @@ export function Reports() {
               size="sm"
               onClick={() =>
                 exportPDF(
-                  `Locações de ${formatDate(from)} a ${formatDate(to)}`,
+                  `Locações de ${formatDateOnly(from)} a ${formatDateOnly(to)}`,
                   'relatorio-locacoes.pdf',
                   ['Produto', 'Cliente', 'Retirada', 'Devolução', 'Valor', 'Status'],
                   periodRentals.map((r) => [
                     r.product,
                     r.customer,
-                    formatDate(r.pickupDate),
-                    formatDate(r.returnDate),
+                    formatDateOnly(r.pickupDate),
+                    formatDateOnly(r.returnDate),
                     formatCurrency(r.totalValue),
                     rentalStatusConfig[r.status].label,
                   ])
@@ -218,8 +218,8 @@ export function Reports() {
                   periodRentals.map((r) => [
                     r.product,
                     r.customer,
-                    formatDate(r.pickupDate),
-                    formatDate(r.returnDate),
+                    formatDateOnly(r.pickupDate),
+                    formatDateOnly(r.returnDate),
                     r.totalValue,
                     rentalStatusConfig[r.status].label,
                   ])

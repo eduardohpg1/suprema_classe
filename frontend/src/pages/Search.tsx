@@ -9,7 +9,7 @@ import { Spinner } from '../components/UI/Spinner';
 import { Badge } from '../components/UI/Badge';
 import { EmptyState } from '../components/UI/EmptyState';
 import { productStatusConfig, rentalStatusConfig } from '../lib/statusConfig';
-import { formatCurrency, formatDate, maskCPF } from '../lib/format';
+import { formatCurrency, formatDateOnly, maskCPF } from '../lib/format';
 
 export function Search() {
   const navigate = useNavigate();
@@ -140,7 +140,7 @@ export function Search() {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-sm text-gray-400">
-                          {formatDate(r.pickupDate)}
+                          {formatDateOnly(r.pickupDate)}
                         </span>
                         <Badge variant={s.variant} dot>
                           {s.label}

@@ -21,6 +21,24 @@ export function formatDate(value?: string | Date | null): string {
   }
 }
 
+/** Formata uma data "sem hora" (retirada/devolução).
+ * Essas datas são gravadas como meia-noite UTC; formatamos pelos componentes
+ * UTC para que o dia exibido seja exatamente o dia escolhido, sem deslocamento
+ * causado pelo fuso horário local. */
+export function formatDateOnly(value?: string | Date | null): string {
+  if (!value) return '-';
+  try {
+    const date = typeof value === 'string' ? parseISO(value) : value;
+    if (Number.isNaN(date.getTime())) return '-';
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return '-';
+  }
+}
+
 export function formatDateTime(value?: string | Date | null): string {
   if (!value) return '-';
   try {

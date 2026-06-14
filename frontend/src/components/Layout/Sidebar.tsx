@@ -4,7 +4,6 @@ import {
   Shirt,
   Users,
   CalendarClock,
-  BarChart3,
   Search,
   X,
 } from 'lucide-react';
@@ -19,7 +18,6 @@ const navItems = [
   { to: '/produtos', label: 'Produtos', icon: Shirt },
   { to: '/clientes', label: 'Clientes', icon: Users },
   { to: '/locacoes', label: 'Locações', icon: CalendarClock },
-  { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   { to: '/busca', label: 'Busca', icon: Search },
 ];
 
