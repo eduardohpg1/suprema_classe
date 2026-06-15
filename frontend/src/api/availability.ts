@@ -10,11 +10,11 @@ export async function getProductAvailability(
   year: number,
   month: number
 ): Promise<AvailabilityDay[]> {
-  const { data } = await api.get<AvailabilityDay[]>(
-    `/products/${productId}/availability`,
+  const { data } = await api.get<{ days: AvailabilityDay[] }>(
+    `/availability/products/${productId}`,
     { params: { year, month } }
   );
-  return data;
+  return data.days;
 }
 
 /**
@@ -28,8 +28,8 @@ export async function checkAvailability(
   excludeRentalId?: string
 ): Promise<{ available: boolean }> {
   const { data } = await api.get<{ available: boolean }>(
-    `/products/${productId}/availability/check`,
-    { params: { pickupDate, returnDate, excludeRentalId } }
+    `/availability/check`,
+    { params: { productId, pickupDate, returnDate, excludeRentalId } }
   );
   return data;
 }
