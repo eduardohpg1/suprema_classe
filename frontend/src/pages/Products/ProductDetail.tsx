@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useQuery } from 'react-query';
+import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { useNavigate, useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   ArrowLeft,
   Pencil,
@@ -9,13 +10,15 @@ import {
   Tag,
   Ruler,
   Palette,
+  Trash2,
 } from 'lucide-react';
-import { getProduct } from '../../api/products';
+import { getProduct, deleteProduct } from '../../api/products';
 import { getRentals } from '../../api/rentals';
 import { ProductCalendar } from '../../components/ProductCalendar';
 import { Button } from '../../components/UI/Button';
 import { Badge } from '../../components/UI/Badge';
 import { Card } from '../../components/UI/Card';
+import { Modal } from '../../components/UI/Modal';
 import { Spinner } from '../../components/UI/Spinner';
 import { Table, Column } from '../../components/UI/Table';
 import { productStatusConfig, rentalStatusConfig } from '../../lib/statusConfig';
@@ -25,11 +28,26 @@ import { Rental } from '../../types';
 export function ProductDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activePhoto, setActivePhoto] = useState(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: product, isLoading } = useQuery(['product', id], () =>
     getProduct(id)
   );
+
+  const deleteMutation = useMutation(() => deleteProduct(id), {
+    onSuccess: () => {
+      toast.success('Produto excluído com sucesso.');
+      queryClient.invalidateQueries('products');
+      navigate('/produtos');
+    },
+    onError: () => {
+      // Erro (ex.: 409 — produto com locação ativa) já é exibido pelo
+      // interceptor da API. Apenas fechamos o modal.
+      setConfirmOpen(false);
+    },
+  });
 
   const { data: rentals } = useQuery(
     ['product-rentals', id],
@@ -178,25 +196,65 @@ export function ProductDetail() {
             </Card>
           )}
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button
-              fullWidth
-              onClick={() =>
-                navigate(`/locacoes/nova?productId=${product.id}`)
-              }
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button
+                fullWidth
+                onClick={() =>
+                  navigate(`/locacoes/nova?productId=${product.id}`)
+                }
+              >
+                <Plus className="h-4 w-4" /> Nova Locação
+              </Button>
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => navigate(`/produtos/${product.id}/editar`)}
+              >
+                <Pencil className="h-4 w-4" /> Editar Produto
+              </Button>
+            </div>
+            <button
+              onClick={() => setConfirmOpen(true)}
+              className="flex items-center gap-1.5 text-sm font-medium text-red-600 transition hover:text-red-700"
             >
-              <Plus className="h-4 w-4" /> Nova Locação
-            </Button>
-            <Button
-              variant="outline"
-              fullWidth
-              onClick={() => navigate(`/produtos/${product.id}/editar`)}
-            >
-              <Pencil className="h-4 w-4" /> Editar Produto
-            </Button>
+              <Trash2 className="h-4 w-4" /> Excluir produto
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Confirmação de exclusão */}
+      <Modal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="Excluir produto"
+        size="sm"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+              disabled={deleteMutation.isLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              loading={deleteMutation.isLoading}
+              onClick={() => deleteMutation.mutate()}
+            >
+              <Trash2 className="h-4 w-4" /> Excluir
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600">
+          Tem certeza que deseja excluir{' '}
+          <strong className="text-gray-900">{product.name}</strong>? Essa ação
+          não pode ser desfeita, e as fotos do produto também serão removidas.
+        </p>
+      </Modal>
 
       {/* Calendar */}
       <div>
