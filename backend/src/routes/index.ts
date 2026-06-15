@@ -56,13 +56,27 @@ router.get('/health/db', async (_req, res) => {
     diag.userCount = 'FALHOU';
     diag.userCountError = `${err.name} [${err.code}]: ${(err.message ?? '').slice(0, 400)}`;
   }
+  // Reproduz o fluxo completo do login, etapa por etapa.
   try {
+    const bcrypt = (await import('bcryptjs')).default;
+    const { signToken } = await import('../middleware/auth');
+
     const u = await prisma.user.findUnique({ where: { email: 'admin@supremaclasse.com' } });
-    diag.findUnique = u ? 'ACHOU usuario' : 'NAO achou (mas rodou)';
+    diag.step_findUnique = u ? 'OK (achou)' : 'NAO achou';
+
+    if (u) {
+      const valid = await bcrypt.compare('admin123', u.password);
+      diag.step_bcrypt = valid ? 'OK (senha confere)' : 'senha NAO confere';
+
+      const token = signToken({ sub: u.id, email: u.email, role: u.role });
+      diag.step_signToken = token ? `OK (len ${token.length})` : 'FALHOU';
+    }
+    diag.loginFlow = 'OK';
   } catch (e) {
-    const err = e as { name?: string; message?: string; code?: string };
-    diag.findUnique = 'FALHOU';
-    diag.findUniqueError = `${err.name} [${err.code}]: ${(err.message ?? '').slice(0, 400)}`;
+    const err = e as { name?: string; message?: string; code?: string; stack?: string };
+    diag.loginFlow = 'FALHOU';
+    diag.loginError = `${err.name} [${err.code ?? '-'}]: ${(err.message ?? '').slice(0, 400)}`;
+    diag.loginStack = (err.stack ?? '').slice(0, 700);
   }
   res.json(diag);
 });
