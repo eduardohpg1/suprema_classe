@@ -18,6 +18,42 @@ router.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'suprema-classe-backend', time: new Date().toISOString() });
 });
 
+// Diagnostico TEMPORARIO de banco/engine (remover apos resolver o deploy).
+router.get('/health/db', async (_req, res) => {
+  const diag: Record<string, unknown> = {
+    hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+    hasDirectUrl: Boolean(process.env.DIRECT_URL),
+    databaseUrlPrefix: process.env.DATABASE_URL?.slice(0, 24) ?? null,
+    nodeEnv: process.env.NODE_ENV ?? null,
+    isVercel: Boolean(process.env.VERCEL),
+    cwd: process.cwd(),
+  };
+  try {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const dir = path.join(process.cwd(), 'node_modules/.prisma/client');
+    diag.engineDir = dir;
+    diag.engineDirExists = fs.existsSync(dir);
+    diag.engines = fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter((f) => f.includes('engine') || f.endsWith('.node') || f.endsWith('.so.node'))
+      : null;
+  } catch (e) {
+    diag.enginesError = (e as Error).message;
+  }
+  try {
+    const { prisma } = await import('../prisma');
+    await prisma.$queryRawUnsafe('SELECT 1');
+    diag.dbQuery = 'OK';
+  } catch (e) {
+    const err = e as { name?: string; message?: string; code?: string };
+    diag.dbQuery = 'FALHOU';
+    diag.errorName = err.name ?? null;
+    diag.errorCode = err.code ?? null;
+    diag.errorMessage = (err.message ?? '').slice(0, 500);
+  }
+  res.json(diag);
+});
+
 // Rotas de autenticacao (login publico; register/me protegidos internamente).
 router.use('/auth', authRoutes);
 
