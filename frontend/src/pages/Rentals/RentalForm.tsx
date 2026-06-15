@@ -16,6 +16,7 @@ import { Button } from '../../components/UI/Button';
 import { Input } from '../../components/UI/Input';
 import { Select } from '../../components/UI/Select';
 import { formatCurrency } from '../../lib/format';
+import { AvailabilityDay } from '../../types';
 
 const schema = z
   .object({
@@ -166,6 +167,23 @@ export function RentalForm() {
       return;
     }
     mutation.mutate(values);
+  };
+
+  // Seleção de datas pelo calendário: 1º clique define a retirada,
+  // 2º clique (em data igual/posterior) define a devolução.
+  const handleCalendarSelect = (date: string, day?: AvailabilityDay) => {
+    if (day?.status === 'rented') {
+      toast.error('Esse dia já está alugado para este produto.');
+      return;
+    }
+    // Reinicia a seleção se: não há retirada, o período já está completo,
+    // ou clicou em um dia anterior à retirada.
+    if (!pickupDate || returnDate || date < pickupDate) {
+      setValue('pickupDate', date, { shouldValidate: true });
+      setValue('returnDate', '', { shouldValidate: false });
+    } else {
+      setValue('returnDate', date, { shouldValidate: true });
+    }
   };
 
   const productOptions = useMemo(
@@ -370,7 +388,21 @@ export function RentalForm() {
             </div>
           )}
           {productId ? (
-            <ProductCalendar productId={productId} />
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <p className="mb-3 text-xs text-gray-500">
+                {!pickupDate
+                  ? 'Clique em um dia para definir a retirada.'
+                  : !returnDate
+                    ? 'Agora clique no dia da devolução.'
+                    : 'Período selecionado. Clique novamente para refazer.'}
+              </p>
+              <ProductCalendar
+                productId={productId}
+                onDateClick={handleCalendarSelect}
+                selectedStart={pickupDate}
+                selectedEnd={returnDate}
+              />
+            </div>
           ) : (
             <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white text-sm text-gray-400">
               Selecione um produto para ver a disponibilidade

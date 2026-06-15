@@ -18,6 +18,9 @@ interface ProductCalendarProps {
   year?: number;
   month?: number;
   onDateClick?: (date: string, day?: AvailabilityDay) => void;
+  /** Periodo selecionado (YYYY-MM-DD) para destacar no calendario. */
+  selectedStart?: string;
+  selectedEnd?: string;
 }
 
 const statusColors: Record<DayAvailability, string> = {
@@ -34,7 +37,14 @@ const statusLabels: Record<DayAvailability, string> = {
 
 const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
-export function ProductCalendar({ productId, year, month, onDateClick }: ProductCalendarProps) {
+export function ProductCalendar({
+  productId,
+  year,
+  month,
+  onDateClick,
+  selectedStart,
+  selectedEnd,
+}: ProductCalendarProps) {
   const now = new Date();
   const [current, setCurrent] = useState(
     new Date(year ?? now.getFullYear(), (month ?? now.getMonth() + 1) - 1, 1)
@@ -110,6 +120,13 @@ export function ProductCalendar({ productId, year, month, onDateClick }: Product
             const status: DayAvailability = info?.status ?? 'available';
             const today  = isToday(day);
 
+            // Destaque do periodo selecionado (retirada -> devolucao).
+            const inRange = selectedStart
+              ? selectedEnd
+                ? key >= selectedStart && key <= selectedEnd
+                : key === selectedStart
+              : false;
+
             return (
               <div key={key} className="flex items-center justify-center">
                 <button
@@ -126,7 +143,7 @@ export function ProductCalendar({ productId, year, month, onDateClick }: Product
                     relative flex h-8 w-8 items-center justify-center rounded-full
                     text-xs font-medium transition-transform hover:scale-110
                     ${statusColors[status]}
-                    ${today ? 'ring-2 ring-offset-1 ring-primary-500' : ''}
+                    ${inRange ? 'ring-2 ring-offset-1 ring-primary-600' : today ? 'ring-2 ring-offset-1 ring-primary-500' : ''}
                   `}
                 >
                   {format(day, 'd')}
