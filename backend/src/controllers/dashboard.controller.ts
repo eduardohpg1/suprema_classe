@@ -3,29 +3,44 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../prisma';
 import { BLOCKING_RENTAL_STATUSES } from '../utils/availability';
 
+// Fuso horario da aplicacao. As datas de retirada/devolucao sao "date-only"
+// gravadas como meia-noite UTC; usamos o dia no fuso local (Brasilia) para que
+// "hoje"/"mes atual" reflitam o calendario do usuario, e nao o do servidor (UTC).
+const APP_TIMEZONE = 'America/Sao_Paulo';
+
 /**
- * Retorna o inicio e fim do dia atual em UTC.
+ * Retorna {year, month, day} do dia atual no fuso da aplicacao (Brasilia).
+ * month e 1-based.
+ */
+function localTodayParts(): { year: number; month: number; day: number } {
+  const formatted = new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const [year, month, day] = formatted.split('-').map(Number);
+  return { year, month, day };
+}
+
+/**
+ * Inicio e fim do dia atual (no fuso local) expressos em UTC, casando com as
+ * datas date-only gravadas a meia-noite UTC.
  */
 function todayRange(): { start: Date; end: Date } {
-  const now = new Date();
-  const start = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-  const end = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999),
-  );
+  const { year, month, day } = localTodayParts();
+  const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
   return { start, end };
 }
 
 /**
- * Inicio e fim do mes corrente em UTC.
+ * Inicio e fim do mes corrente (no fuso local) expressos em UTC.
  */
 function currentMonthRange(): { start: Date; end: Date } {
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const end = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999),
-  );
+  const { year, month } = localTodayParts();
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
   return { start, end };
 }
 
