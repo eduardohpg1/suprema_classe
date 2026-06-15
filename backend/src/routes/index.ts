@@ -40,16 +40,29 @@ router.get('/health/db', async (_req, res) => {
   } catch (e) {
     diag.enginesError = (e as Error).message;
   }
+  const { prisma } = await import('../prisma');
   try {
-    const { prisma } = await import('../prisma');
     await prisma.$queryRawUnsafe('SELECT 1');
-    diag.dbQuery = 'OK';
+    diag.rawQuery = 'OK';
   } catch (e) {
     const err = e as { name?: string; message?: string; code?: string };
-    diag.dbQuery = 'FALHOU';
-    diag.errorName = err.name ?? null;
-    diag.errorCode = err.code ?? null;
-    diag.errorMessage = (err.message ?? '').slice(0, 500);
+    diag.rawQuery = 'FALHOU';
+    diag.rawError = `${err.name}: ${(err.message ?? '').slice(0, 400)}`;
+  }
+  try {
+    diag.userCount = await prisma.user.count();
+  } catch (e) {
+    const err = e as { name?: string; message?: string; code?: string };
+    diag.userCount = 'FALHOU';
+    diag.userCountError = `${err.name} [${err.code}]: ${(err.message ?? '').slice(0, 400)}`;
+  }
+  try {
+    const u = await prisma.user.findUnique({ where: { email: 'admin@supremaclasse.com' } });
+    diag.findUnique = u ? 'ACHOU usuario' : 'NAO achou (mas rodou)';
+  } catch (e) {
+    const err = e as { name?: string; message?: string; code?: string };
+    diag.findUnique = 'FALHOU';
+    diag.findUniqueError = `${err.name} [${err.code}]: ${(err.message ?? '').slice(0, 400)}`;
   }
   res.json(diag);
 });
