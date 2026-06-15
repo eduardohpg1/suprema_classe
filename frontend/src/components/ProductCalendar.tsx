@@ -81,12 +81,14 @@ export function ProductCalendar({
         </span>
         <div className="flex gap-1">
           <button
+            type="button"
             onClick={() => setCurrent(new Date(viewYear, viewMonth - 2, 1))}
             className="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
+            type="button"
             onClick={() => setCurrent(new Date(viewYear, viewMonth, 1))}
             className="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
           >
@@ -130,6 +132,7 @@ export function ProductCalendar({
             return (
               <div key={key} className="flex items-center justify-center">
                 <button
+                  type="button"
                   onClick={() => onDateClick?.(key, info)}
                   onMouseEnter={(e) => {
                     const label = info?.rental
