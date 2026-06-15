@@ -27,6 +27,7 @@ router.get('/health/db', async (_req, res) => {
     nodeEnv: process.env.NODE_ENV ?? null,
     isVercel: Boolean(process.env.VERCEL),
     cwd: process.cwd(),
+    jwtExpiresInRaw: JSON.stringify(process.env.JWT_EXPIRES_IN ?? null),
   };
   try {
     const fs = await import('node:fs');

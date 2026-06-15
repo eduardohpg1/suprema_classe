@@ -30,7 +30,12 @@ function getSecret(): string {
  * Gera um token JWT assinado para um usuario.
  */
 export function signToken(payload: JwtPayload): string {
-  const expiresIn = process.env.JWT_EXPIRES_IN ?? '7d';
+  // Sanitiza o valor: variaveis de ambiente podem vir com aspas/espacos
+  // (ex.: "7d" ou ' 7d '), o que quebra o parser do jsonwebtoken.
+  const raw = (process.env.JWT_EXPIRES_IN ?? '').trim().replace(/^["']|["']$/g, '');
+  // Numero puro -> segundos; timespan valido -> string; caso contrario -> padrao.
+  const expiresIn: number | string =
+    raw === '' ? '7d' : /^\d+$/.test(raw) ? Number(raw) : raw;
   return jwt.sign(payload, getSecret(), { expiresIn } as jwt.SignOptions);
 }
 
