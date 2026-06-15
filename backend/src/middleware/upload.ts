@@ -4,14 +4,22 @@ import { randomBytes } from 'node:crypto';
 import { Request } from 'express';
 import multer, { FileFilterCallback } from 'multer';
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
+// Em ambientes serverless (Vercel) o filesystem e somente-leitura, exceto /tmp.
+const isServerless = Boolean(process.env.VERCEL);
+const UPLOAD_DIR =
+  process.env.UPLOAD_DIR ?? (isServerless ? '/tmp/uploads' : './uploads');
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_FILES = 10;
 
 // Garante que o diretorio de uploads exista no boot.
+// Envolto em try/catch para nunca derrubar a aplicacao caso o FS seja read-only.
 const absoluteUploadDir = path.resolve(UPLOAD_DIR);
-if (!fs.existsSync(absoluteUploadDir)) {
-  fs.mkdirSync(absoluteUploadDir, { recursive: true });
+try {
+  if (!fs.existsSync(absoluteUploadDir)) {
+    fs.mkdirSync(absoluteUploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn(`[upload] Nao foi possivel criar ${absoluteUploadDir}:`, err);
 }
 
 const ALLOWED_MIME = new Set([
