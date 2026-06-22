@@ -5,6 +5,7 @@ import {
   Users,
   CalendarClock,
   Search,
+  Tag,
   X,
 } from 'lucide-react';
 
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/produtos', label: 'Produtos', icon: Shirt },
   { to: '/clientes', label: 'Clientes', icon: Users },
   { to: '/locacoes', label: 'Locações', icon: CalendarClock },
+  { to: '/acessorios', label: 'Acessórios', icon: Tag },
   { to: '/busca', label: 'Busca', icon: Search },
 ];
 

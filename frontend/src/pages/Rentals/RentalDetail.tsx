@@ -152,6 +152,29 @@ export function RentalDetail() {
             </p>
           )}
         </Card>
+
+        {rental.accessories && rental.accessories.length > 0 && (
+          <Card className="md:col-span-2">
+            <h3 className="mb-3 text-sm font-semibold uppercase text-gray-400">
+              Acessórios incluídos
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {rental.accessories.map((ra) => (
+                <span
+                  key={ra.id}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-700"
+                >
+                  {ra.accessory.name}
+                  {ra.quantity > 1 && (
+                    <span className="rounded-full bg-primary-200 px-1.5 py-0.5 text-xs font-bold">
+                      ×{ra.quantity}
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Actions */}

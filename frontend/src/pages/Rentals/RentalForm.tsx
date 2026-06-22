@@ -4,11 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, Plus, Minus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getProducts, getProduct } from '../../api/products';
 import { getCustomers } from '../../api/customers';
 import { createRental, RentalPayload } from '../../api/rentals';
+import { getAccessories } from '../../api/accessories';
 import { checkAvailability } from '../../api/availability';
 import { useDebounce } from '../../hooks/useDebounce';
 import { ProductCalendar } from '../../components/ProductCalendar';
@@ -49,6 +50,9 @@ export function RentalForm() {
   const [availability, setAvailability] = useState<
     'unknown' | 'checking' | 'available' | 'conflict'
   >('unknown');
+  const [selectedAccessories, setSelectedAccessories] = useState<
+    Record<string, number>
+  >({});
 
   const { data: productsData } = useQuery(
     ['products-select', debouncedProduct],
@@ -58,6 +62,7 @@ export function RentalForm() {
     ['customers-select', debouncedCustomer],
     () => getCustomers({ search: debouncedCustomer, pageSize: 20 })
   );
+  const { data: accessoriesData = [] } = useQuery('accessories', getAccessories);
 
   const {
     register,
@@ -147,6 +152,9 @@ export function RentalForm() {
         depositValue: Number(values.depositValue),
         remainingValue: Number(values.remainingValue),
         notes: values.notes || undefined,
+        accessories: Object.entries(selectedAccessories)
+          .filter(([, qty]) => qty > 0)
+          .map(([accessoryId, quantity]) => ({ accessoryId, quantity })),
       };
       return createRental(payload);
     },
@@ -356,6 +364,58 @@ export function RentalForm() {
               {...register('notes')}
             />
           </div>
+
+          {/* Acessórios */}
+          {accessoriesData.length > 0 && (
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Acessórios incluídos
+              </label>
+              <div className="space-y-2">
+                {accessoriesData.map((acc) => {
+                  const qty = selectedAccessories[acc.id] ?? 0;
+                  return (
+                    <div
+                      key={acc.id}
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
+                    >
+                      <span className="text-sm text-gray-800">{acc.name}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedAccessories((prev) => ({
+                              ...prev,
+                              [acc.id]: Math.max(0, (prev[acc.id] ?? 0) - 1),
+                            }))
+                          }
+                          disabled={qty === 0}
+                          className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                        <span className={`w-5 text-center text-sm font-semibold ${qty > 0 ? 'text-primary-600' : 'text-gray-400'}`}>
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedAccessories((prev) => ({
+                              ...prev,
+                              [acc.id]: (prev[acc.id] ?? 0) + 1,
+                            }))
+                          }
+                          className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
             <Button

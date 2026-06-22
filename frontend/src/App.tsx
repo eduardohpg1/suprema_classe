@@ -10,6 +10,7 @@ import { CustomerForm } from './pages/Customers/CustomerForm';
 import { RentalList } from './pages/Rentals/RentalList';
 import { RentalDetail } from './pages/Rentals/RentalDetail';
 import { RentalForm } from './pages/Rentals/RentalForm';
+import { AccessoryList } from './pages/Accessories/AccessoryList';
 import { Reports } from './pages/Reports';
 import { Search } from './pages/Search';
 import { useAuth } from './hooks/useAuth';
@@ -87,6 +88,8 @@ export default function App() {
           <Route path="/locacoes" element={<RentalList />} />
           <Route path="/locacoes/nova" element={<RentalForm />} />
           <Route path="/locacoes/:id" element={<RentalDetail />} />
+
+          <Route path="/acessorios" element={<AccessoryList />} />
 
           <Route path="/relatorios" element={<Reports />} />
           <Route path="/busca" element={<Search />} />

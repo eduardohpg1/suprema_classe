@@ -120,10 +120,11 @@ model Rental {
   depositValue   Decimal      @db.Decimal(10, 2)
   remainingValue Decimal      @db.Decimal(10, 2)
   notes          String?
-  status         RentalStatus @default(ACTIVE)
+  status         RentalStatus    @default(ACTIVE)
   contract       Contract?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  accessories    RentalAccessory[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@index([productId])
   @@index([customerId])
@@ -155,4 +156,26 @@ model Contract {
   rental      Rental   @relation(fields: [rentalId], references: [id])
   pdfPath     String?
   generatedAt DateTime @default(now())
+}
+
+model Accessory {
+  id        String            @id @default(cuid())
+  name      String            @unique
+  rentals   RentalAccessory[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([name])
+}
+
+model RentalAccessory {
+  id          String    @id @default(cuid())
+  rentalId    String
+  rental      Rental    @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  accessoryId String
+  accessory   Accessory @relation(fields: [accessoryId], references: [id])
+  quantity    Int       @default(1)
+
+  @@unique([rentalId, accessoryId])
+  @@index([rentalId])
 }

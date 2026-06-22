@@ -14,6 +14,11 @@ const RENTAL_STATUSES = ['ACTIVE', 'RETURNED', 'OVERDUE', 'CANCELLED'] as const;
 
 const dateSchema = z.coerce.date();
 
+const accessoryItemSchema = z.object({
+  accessoryId: z.string().min(1),
+  quantity: z.coerce.number().int().positive().default(1),
+});
+
 const createRentalSchema = z
   .object({
     productId: z.string().min(1, 'Produto obrigatorio.'),
@@ -24,6 +29,7 @@ const createRentalSchema = z
     depositValue: z.coerce.number().nonnegative('Valor de sinal invalido.').default(0),
     remainingValue: z.coerce.number().nonnegative('Valor restante invalido.').optional(),
     notes: z.string().max(1000).optional().nullable(),
+    accessories: z.array(accessoryItemSchema).optional().default([]),
   })
   .refine((d) => d.returnDate >= d.pickupDate, {
     message: 'Data de devolucao deve ser igual ou posterior a data de retirada.',
@@ -39,6 +45,7 @@ const updateRentalSchema = z
     remainingValue: z.coerce.number().nonnegative().optional(),
     notes: z.string().max(1000).optional().nullable(),
     status: z.enum(RENTAL_STATUSES).optional(),
+    accessories: z.array(accessoryItemSchema).optional(),
   })
   .refine(
     (d) =>
@@ -57,6 +64,10 @@ const rentalInclude = {
     select: { id: true, name: true, cpf: true, rg: true, phone: true, address: true },
   },
   contract: true,
+  accessories: {
+    include: { accessory: { select: { id: true, name: true } } },
+    orderBy: { accessory: { name: 'asc' } },
+  },
 } satisfies Prisma.RentalInclude;
 
 /**
@@ -168,6 +179,14 @@ export async function createRental(req: Request, res: Response): Promise<void> {
           remainingValue: new Prisma.Decimal(remainingValue),
           notes: data.notes ?? null,
           status: 'ACTIVE',
+          accessories: data.accessories?.length
+            ? {
+                create: data.accessories.map((a) => ({
+                  accessoryId: a.accessoryId,
+                  quantity: a.quantity,
+                })),
+              }
+            : undefined,
         },
         include: rentalInclude,
       });
@@ -237,6 +256,19 @@ export async function updateRental(req: Request, res: Response): Promise<void> {
       }
       if (data.notes !== undefined) updateData.notes = data.notes;
       if (data.status !== undefined) updateData.status = data.status;
+
+      if (data.accessories !== undefined) {
+        await tx.rentalAccessory.deleteMany({ where: { rentalId } });
+        if (data.accessories.length > 0) {
+          await tx.rentalAccessory.createMany({
+            data: data.accessories.map((a) => ({
+              rentalId,
+              accessoryId: a.accessoryId,
+              quantity: a.quantity,
+            })),
+          });
+        }
+      }
 
       const updated = await tx.rental.update({
         where: { id: rentalId },

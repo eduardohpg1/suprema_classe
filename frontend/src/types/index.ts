@@ -43,6 +43,19 @@ export interface Customer {
   rentalsCount?: number;
 }
 
+export interface Accessory {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface RentalAccessory {
+  id: string;
+  accessoryId: string;
+  accessory: { id: string; name: string };
+  quantity: number;
+}
+
 export interface Rental {
   id: string;
   product: Product;
@@ -54,6 +67,7 @@ export interface Rental {
   remainingValue: number;
   notes?: string;
   status: RentalStatus;
+  accessories?: RentalAccessory[];
   createdAt: string;
 }
 
