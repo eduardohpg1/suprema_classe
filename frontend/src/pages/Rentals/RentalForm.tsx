@@ -46,6 +46,7 @@ export function RentalForm() {
   const [searchParams] = useSearchParams();
 
   const [productSearch, setProductSearch] = useState('');
+  const [productFocused, setProductFocused] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const debouncedProduct = useDebounce(productSearch, 350);
   const debouncedCustomer = useDebounce(customerSearch, 350);
@@ -60,7 +61,7 @@ export function RentalForm() {
 
   const { data: productsData } = useQuery(
     ['products-select', debouncedProduct],
-    () => getProducts({ search: debouncedProduct, pageSize: 30, status: 'AVAILABLE' })
+    () => getProducts({ search: debouncedProduct, pageSize: 30 })
   );
   const { data: customersData } = useQuery(
     ['customers-select', debouncedCustomer],
@@ -299,33 +300,37 @@ export function RentalForm() {
             )}
 
             {/* Buscador para adicionar novo item */}
-            <div className="space-y-2">
+            <div className="relative">
               <Input
                 label=""
                 placeholder="Buscar produto ou acessório..."
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
+                onFocus={() => setProductFocused(true)}
+                onBlur={() => setTimeout(() => setProductFocused(false), 150)}
               />
-              {productOptions.length > 0 && productSearch.length > 0 && (
-                <div className="rounded-lg border border-gray-200 bg-white shadow-sm divide-y divide-gray-100 max-h-48 overflow-y-auto">
-                  {productOptions.map((opt) => {
-                    const prod = productsData?.data.find((p) => p.id === opt.value);
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => prod && addItem(prod)}
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-primary-50 flex items-center justify-between gap-2"
-                      >
-                        <span className="text-gray-800">{opt.label}</span>
-                        <Plus className="h-3.5 w-3.5 text-primary-500 flex-shrink-0" />
-                      </button>
-                    );
-                  })}
+              {productFocused && (
+                <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg divide-y divide-gray-100 max-h-56 overflow-y-auto">
+                  {productOptions.length > 0 ? (
+                    productOptions.map((opt) => {
+                      const prod = productsData?.data.find((p) => p.id === opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => { prod && addItem(prod); setProductSearch(''); }}
+                          className="w-full px-3 py-2.5 text-left text-sm hover:bg-primary-50 flex items-center justify-between gap-2"
+                        >
+                          <span className="text-gray-800">{opt.label}</span>
+                          <Plus className="h-3.5 w-3.5 text-primary-500 flex-shrink-0" />
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="px-3 py-2.5 text-sm text-gray-400 italic">Nenhum produto encontrado.</p>
+                  )}
                 </div>
-              )}
-              {productSearch.length > 0 && productOptions.length === 0 && (
-                <p className="text-xs text-gray-400 italic">Nenhum produto disponível encontrado.</p>
               )}
             </div>
 
