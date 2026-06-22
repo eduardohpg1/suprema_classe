@@ -325,6 +325,40 @@ export async function returnRental(req: Request, res: Response): Promise<void> {
 }
 
 /**
+ * DELETE /rentals/:id
+ * Remove a locacao permanentemente e libera o produto se necessario.
+ */
+export async function deleteRental(req: Request, res: Response): Promise<void> {
+  const rentalId = req.params.id;
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.rental.findUnique({ where: { id: rentalId } });
+    if (!existing) {
+      throw new AppError(404, 'Locacao nao encontrada.');
+    }
+
+    await tx.rental.delete({ where: { id: rentalId } });
+
+    if (BLOCKING_RENTAL_STATUSES.includes(existing.status)) {
+      const otherActive = await tx.rental.count({
+        where: {
+          productId: existing.productId,
+          status: { in: BLOCKING_RENTAL_STATUSES },
+        },
+      });
+      if (otherActive === 0) {
+        await tx.product.update({
+          where: { id: existing.productId },
+          data: { status: 'AVAILABLE' },
+        });
+      }
+    }
+  });
+
+  res.status(204).end();
+}
+
+/**
  * POST /rentals/:id/cancel
  * Cancela a locacao e libera o produto se nao houver outra ativa.
  */

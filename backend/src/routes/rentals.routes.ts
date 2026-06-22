@@ -6,6 +6,7 @@ import {
   updateRental,
   returnRental,
   cancelRental,
+  deleteRental,
 } from '../controllers/rentals.controller';
 import { asyncHandler } from '../middleware/errorHandler';
 
@@ -17,5 +18,6 @@ router.post('/', asyncHandler(createRental));
 router.put('/:id', asyncHandler(updateRental));
 router.post('/:id/return', asyncHandler(returnRental));
 router.post('/:id/cancel', asyncHandler(cancelRental));
+router.delete('/:id', asyncHandler(deleteRental));
 
 export default router;

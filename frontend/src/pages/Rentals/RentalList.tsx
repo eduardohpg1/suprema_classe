@@ -9,9 +9,10 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getRentals, returnRental } from '../../api/rentals';
+import { getRentals, returnRental, deleteRental } from '../../api/rentals';
 import { generateContract } from '../../components/ContractPDF';
 import { Button } from '../../components/UI/Button';
 import { Select } from '../../components/UI/Select';
@@ -20,6 +21,7 @@ import { Spinner } from '../../components/UI/Spinner';
 import { Table, Column } from '../../components/UI/Table';
 import { Badge } from '../../components/UI/Badge';
 import { EmptyState } from '../../components/UI/EmptyState';
+import { Modal } from '../../components/UI/Modal';
 import { Rental, RentalStatus } from '../../types';
 import { rentalStatusConfig } from '../../lib/statusConfig';
 import { formatCurrency, formatDateOnly } from '../../lib/format';
@@ -32,6 +34,7 @@ export function RentalList() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
+  const [rentalToDelete, setRentalToDelete] = useState<Rental | null>(null);
 
   const { data, isLoading } = useQuery(
     ['rentals', status, from, to, page],
@@ -46,6 +49,17 @@ export function RentalList() {
     },
     onError: () => {
       toast.error('Não foi possível concluir a devolução.');
+    },
+  });
+
+  const deleteMutation = useMutation((id: string) => deleteRental(id), {
+    onSuccess: () => {
+      toast.success('Locação excluída.');
+      queryClient.invalidateQueries('rentals');
+      setRentalToDelete(null);
+    },
+    onError: () => {
+      toast.error('Não foi possível excluir a locação.');
     },
   });
 
@@ -128,12 +142,55 @@ export function RentalList() {
               <CheckCircle2 className="h-4 w-4" />
             </button>
           )}
+          <button
+            title="Excluir locação"
+            onClick={(e) => {
+              e.stopPropagation();
+              setRentalToDelete(r);
+            }}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       ),
     },
   ];
 
   return (
+    <>
+    <Modal
+      open={!!rentalToDelete}
+      onClose={() => setRentalToDelete(null)}
+      title="Excluir locação"
+      size="sm"
+      footer={
+        <>
+          <Button
+            variant="outline"
+            onClick={() => setRentalToDelete(null)}
+            disabled={deleteMutation.isLoading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => rentalToDelete && deleteMutation.mutate(rentalToDelete.id)}
+            disabled={deleteMutation.isLoading}
+          >
+            {deleteMutation.isLoading ? 'Excluindo...' : 'Excluir'}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-gray-600">
+        Tem certeza que deseja excluir a locação de{' '}
+        <span className="font-semibold text-gray-900">{rentalToDelete?.product?.name}</span>{' '}
+        para{' '}
+        <span className="font-semibold text-gray-900">{rentalToDelete?.customer?.name}</span>?
+        Esta ação não poderá ser desfeita.
+      </p>
+    </Modal>
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-gray-500">
@@ -221,6 +278,7 @@ export function RentalList() {
         </>
       )}
     </div>
+    </>
   );
 }
 

@@ -60,3 +60,7 @@ export async function cancelRental(id: string): Promise<Rental> {
   const { data } = await api.patch<Rental>(`/rentals/${id}/cancel`);
   return data;
 }
+
+export async function deleteRental(id: string): Promise<void> {
+  await api.delete(`/rentals/${id}`);
+}
