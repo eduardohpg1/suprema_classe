@@ -50,3 +50,7 @@ export async function updateCustomer(
   const { data } = await api.put<Customer>(`/customers/${id}`, payload);
   return data;
 }
+
+export async function deleteCustomer(id: string): Promise<void> {
+  await api.delete(`/customers/${id}`);
+}
