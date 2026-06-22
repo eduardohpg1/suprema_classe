@@ -366,11 +366,15 @@ export function RentalForm() {
           </div>
 
           {/* Acessórios */}
-          {accessoriesData.length > 0 && (
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Acessórios incluídos
-              </label>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Acessórios incluídos
+            </label>
+            {accessoriesData.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">
+                Nenhum acessório cadastrado. Acesse o menu <strong className="font-medium text-gray-500">Acessórios</strong> para cadastrar itens como gravata, camisa, suspensório...
+              </p>
+            ) : (
               <div className="space-y-2">
                 {accessoriesData.map((acc) => {
                   const qty = selectedAccessories[acc.id] ?? 0;
@@ -414,8 +418,8 @@ export function RentalForm() {
                   );
                 })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
             <Button
