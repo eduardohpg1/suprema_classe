@@ -72,7 +72,14 @@ export function RentalList() {
       key: 'product',
       header: 'Produto',
       render: (r) => (
-        <span className="font-medium text-gray-900">{r.product?.name}</span>
+        <span className="font-medium text-gray-900">
+          {r.items?.[0]?.product?.name ?? '-'}
+          {r.items && r.items.length > 1 && (
+            <span className="ml-1.5 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+              +{r.items.length - 1}
+            </span>
+          )}
+        </span>
       ),
     },
     { key: 'customer', header: 'Cliente', render: (r) => r.customer?.name },
@@ -185,7 +192,9 @@ export function RentalList() {
     >
       <p className="text-sm text-gray-600">
         Tem certeza que deseja excluir a locação de{' '}
-        <span className="font-semibold text-gray-900">{rentalToDelete?.product?.name}</span>{' '}
+        <span className="font-semibold text-gray-900">
+          {rentalToDelete?.items?.[0]?.product?.name ?? 'produto'}
+        </span>{' '}
         para{' '}
         <span className="font-semibold text-gray-900">{rentalToDelete?.customer?.name}</span>?
         Esta ação não poderá ser desfeita.

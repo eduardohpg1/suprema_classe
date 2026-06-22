@@ -76,10 +76,18 @@ export async function getProduct(req: Request, res: Response): Promise<void> {
     include: {
       category: { select: { id: true, name: true } },
       photos: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
-      rentals: {
-        orderBy: { pickupDate: 'desc' },
+      rentalItems: {
+        orderBy: { rental: { pickupDate: 'desc' } },
         include: {
-          customer: { select: { id: true, name: true, phone: true } },
+          rental: {
+            select: {
+              id: true,
+              pickupDate: true,
+              returnDate: true,
+              status: true,
+              customer: { select: { id: true, name: true, phone: true } },
+            },
+          },
         },
       },
       reservations: {
@@ -180,10 +188,10 @@ export async function updateProduct(req: Request, res: Response): Promise<void> 
  * Remove fotos do disco em cascata.
  */
 export async function deleteProduct(req: Request, res: Response): Promise<void> {
-  const activeRentals = await prisma.rental.count({
+  const activeRentals = await prisma.rentalItem.count({
     where: {
       productId: req.params.id,
-      status: { in: BLOCKING_RENTAL_STATUSES },
+      rental: { status: { in: BLOCKING_RENTAL_STATUSES } },
     },
   });
 

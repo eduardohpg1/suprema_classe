@@ -14,11 +14,18 @@ interface DayAvailability {
   status: DayStatus;
 }
 
-/**
- * Formata uma data como YYYY-MM-DD em UTC (estavel, sem efeito de fuso).
- */
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+function startOfDay(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function endOfDay(d: Date): Date {
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999),
+  );
 }
 
 const monthQuerySchema = z.object({
@@ -28,9 +35,7 @@ const monthQuerySchema = z.object({
 
 /**
  * GET /availability/products/:productId?year=YYYY&month=M
- * Retorna o status (available/reserved/rented) de cada dia do mes para o produto.
- *
- * Precedencia por dia: rented > reserved > available.
+ * Retorna o status de cada dia do mes para o produto.
  */
 export async function getProductAvailability(
   req: Request,
@@ -47,23 +52,25 @@ export async function getProductAvailability(
     throw new AppError(404, 'Produto nao encontrado.');
   }
 
-  // Limites do mes em UTC. month e 1-based; Date.UTC usa 0-based.
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
-  const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)); // ultimo dia
+  const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
   const daysInMonth = monthEnd.getUTCDate();
 
-  // Locacoes ativas que tocam o mes.
-  const rentals = await prisma.rental.findMany({
+  // Locacoes ativas que envolvem este produto e tocam o mes
+  const rentalItems = await prisma.rentalItem.findMany({
     where: {
       productId,
-      status: { in: BLOCKING_RENTAL_STATUSES },
-      pickupDate: { lte: monthEnd },
-      returnDate: { gte: monthStart },
+      rental: {
+        status: { in: BLOCKING_RENTAL_STATUSES },
+        pickupDate: { lte: monthEnd },
+        returnDate: { gte: monthStart },
+      },
     },
-    select: { pickupDate: true, returnDate: true },
+    include: {
+      rental: { select: { pickupDate: true, returnDate: true } },
+    },
   });
 
-  // Reservas nao canceladas dentro do mes.
   const reservations = await prisma.reservation.findMany({
     where: {
       productId,
@@ -73,9 +80,7 @@ export async function getProductAvailability(
     select: { date: true },
   });
 
-  const reservedDays = new Set<string>(
-    reservations.map((r) => toISODate(r.date)),
-  );
+  const reservedDays = new Set<string>(reservations.map((r) => toISODate(r.date)));
 
   const days: DayAvailability[] = [];
 
@@ -83,9 +88,10 @@ export async function getProductAvailability(
     const current = new Date(Date.UTC(year, month - 1, day));
     const iso = toISODate(current);
 
-    // Rented tem precedencia maxima: dia cai em algum intervalo de locacao?
-    const isRented = rentals.some(
-      (r) => current >= startOfDay(r.pickupDate) && current <= endOfDay(r.returnDate),
+    const isRented = rentalItems.some(
+      (ri) =>
+        current >= startOfDay(ri.rental.pickupDate) &&
+        current <= endOfDay(ri.rental.returnDate),
     );
 
     let status: DayStatus = 'available';
@@ -98,22 +104,7 @@ export async function getProductAvailability(
     days.push({ date: iso, status });
   }
 
-  res.json({
-    productId,
-    year,
-    month,
-    days,
-  });
-}
-
-function startOfDay(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
-
-function endOfDay(d: Date): Date {
-  return new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999),
-  );
+  res.json({ productId, year, month, days });
 }
 
 const checkQuerySchema = z.object({
@@ -125,8 +116,6 @@ const checkQuerySchema = z.object({
 
 /**
  * GET /availability/check?productId=&pickupDate=&returnDate=
- * Pre-validacao de UX: informa se o intervalo esta livre.
- * NAO substitui a verificacao transacional na criacao da locacao.
  */
 export async function checkAvailability(req: Request, res: Response): Promise<void> {
   const { productId, pickupDate, returnDate, excludeRentalId } =

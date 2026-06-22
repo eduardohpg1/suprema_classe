@@ -83,7 +83,7 @@ export async function getDashboard(_req: Request, res: Response): Promise<void> 
         status: { not: 'CANCELLED' },
       },
       include: {
-        product: { select: { id: true, code: true, name: true } },
+        items: { include: { product: { select: { id: true, code: true, name: true } } }, take: 1 },
         customer: { select: { id: true, name: true, phone: true } },
       },
       orderBy: { pickupDate: 'asc' },
@@ -94,7 +94,7 @@ export async function getDashboard(_req: Request, res: Response): Promise<void> 
         status: { in: BLOCKING_RENTAL_STATUSES },
       },
       include: {
-        product: { select: { id: true, code: true, name: true } },
+        items: { include: { product: { select: { id: true, code: true, name: true } } }, take: 1 },
         customer: { select: { id: true, name: true, phone: true } },
       },
       orderBy: { returnDate: 'asc' },

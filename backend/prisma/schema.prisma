@@ -36,8 +36,6 @@ enum UserRole {
   STAFF
 }
 
-// Usuario do sistema (autenticacao via JWT). Modelo minimo necessario para
-// suportar login/me exigidos pelas rotas de auth da missao.
 model User {
   id        String   @id @default(cuid())
   name      String
@@ -71,7 +69,7 @@ model Product {
   notes        String?
   status       ProductStatus @default(AVAILABLE)
   photos       Photo[]
-  rentals      Rental[]
+  rentalItems  RentalItem[]
   reservations Reservation[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -110,8 +108,6 @@ model Customer {
 
 model Rental {
   id             String       @id @default(cuid())
-  productId      String
-  product        Product      @relation(fields: [productId], references: [id])
   customerId     String
   customer       Customer     @relation(fields: [customerId], references: [id])
   pickupDate     DateTime
@@ -120,17 +116,31 @@ model Rental {
   depositValue   Decimal      @db.Decimal(10, 2)
   remainingValue Decimal      @db.Decimal(10, 2)
   notes          String?
-  status         RentalStatus    @default(ACTIVE)
+  status         RentalStatus @default(ACTIVE)
+  items          RentalItem[]
   contract       Contract?
-  accessories    RentalAccessory[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  @@index([productId])
   @@index([customerId])
   @@index([pickupDate])
   @@index([returnDate])
   @@index([status])
+}
+
+// Cada item de uma locação = 1 produto com seu preço unitário no momento da locação
+model RentalItem {
+  id         String   @id @default(cuid())
+  rentalId   String
+  rental     Rental   @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  quantity   Int      @default(1)
+
+  @@unique([rentalId, productId])
+  @@index([rentalId])
+  @@index([productId])
 }
 
 model Reservation {
@@ -156,26 +166,4 @@ model Contract {
   rental      Rental   @relation(fields: [rentalId], references: [id])
   pdfPath     String?
   generatedAt DateTime @default(now())
-}
-
-model Accessory {
-  id        String            @id @default(cuid())
-  name      String            @unique
-  rentals   RentalAccessory[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-
-  @@index([name])
-}
-
-model RentalAccessory {
-  id          String    @id @default(cuid())
-  rentalId    String
-  rental      Rental    @relation(fields: [rentalId], references: [id], onDelete: Cascade)
-  accessoryId String
-  accessory   Accessory @relation(fields: [accessoryId], references: [id])
-  quantity    Int       @default(1)
-
-  @@unique([rentalId, accessoryId])
-  @@index([rentalId])
 }

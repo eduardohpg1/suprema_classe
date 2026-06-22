@@ -10,8 +10,6 @@ import availabilityRoutes from './availability.routes';
 import dashboardRoutes from './dashboard.routes';
 import searchRoutes from './search.routes';
 import reportsRoutes from './reports.routes';
-import accessoriesRoutes from './accessories.routes';
-
 const router = Router();
 
 // Healthcheck publico.
@@ -32,6 +30,5 @@ router.use('/availability', authenticate, availabilityRoutes);
 router.use('/dashboard', authenticate, dashboardRoutes);
 router.use('/search', authenticate, searchRoutes);
 router.use('/reports', authenticate, reportsRoutes);
-router.use('/accessories', authenticate, accessoriesRoutes);
 
 export default router;

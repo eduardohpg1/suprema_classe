@@ -37,9 +37,7 @@ export function RentalDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: rental, isLoading } = useQuery(['rental', id], () =>
-    getRental(id)
-  );
+  const { data: rental, isLoading } = useQuery(['rental', id], () => getRental(id));
 
   const returnMutation = useMutation(() => returnRental(id), {
     onSuccess: () => {
@@ -47,9 +45,7 @@ export function RentalDetail() {
       queryClient.invalidateQueries(['rental', id]);
       queryClient.invalidateQueries('rentals');
     },
-    onError: () => {
-      toast.error('Não foi possível concluir a devolução.');
-    },
+    onError: () => toast.error('Não foi possível concluir a devolução.'),
   });
 
   const cancelMutation = useMutation(() => cancelRental(id), {
@@ -58,9 +54,7 @@ export function RentalDetail() {
       queryClient.invalidateQueries(['rental', id]);
       queryClient.invalidateQueries('rentals');
     },
-    onError: () => {
-      toast.error('Não foi possível cancelar a locação.');
-    },
+    onError: () => toast.error('Não foi possível cancelar a locação.'),
   });
 
   if (isLoading || !rental) {
@@ -68,6 +62,7 @@ export function RentalDetail() {
   }
 
   const status = rentalStatusConfig[rental.status];
+  const mainItem = rental.items?.[0];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -85,65 +80,70 @@ export function RentalDetail() {
 
       <div>
         <h2 className="text-2xl font-bold text-gray-900">
-          Locação · {rental.product?.name}
+          Locação{mainItem ? ` · ${mainItem.product.name}` : ''}
         </h2>
-        <p className="text-sm text-gray-400">
-          Criada em {formatDate(rental.createdAt)}
-        </p>
+        <p className="text-sm text-gray-400">Criada em {formatDate(rental.createdAt)}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
-          <h3 className="mb-3 text-sm font-semibold uppercase text-gray-400">
-            Cliente
-          </h3>
+          <h3 className="mb-3 text-sm font-semibold uppercase text-gray-400">Cliente</h3>
           <InfoRow label="Nome" value={rental.customer?.name} />
-          <InfoRow
-            label="CPF"
-            value={rental.customer?.cpf ? maskCPF(rental.customer.cpf) : '-'}
-          />
+          <InfoRow label="CPF" value={rental.customer?.cpf ? maskCPF(rental.customer.cpf) : '-'} />
           <InfoRow label="RG" value={rental.customer?.rg} />
-          <InfoRow
-            label="Telefone"
-            value={
-              rental.customer?.phone ? maskPhone(rental.customer.phone) : '-'
-            }
-          />
+          <InfoRow label="Telefone" value={rental.customer?.phone ? maskPhone(rental.customer.phone) : '-'} />
           <InfoRow label="Endereço" value={rental.customer?.address} />
         </Card>
 
         <Card>
-          <h3 className="mb-3 text-sm font-semibold uppercase text-gray-400">
-            Produto & Datas
-          </h3>
-          <InfoRow label="Produto" value={rental.product?.name} />
-          <InfoRow label="Código" value={rental.product?.code} />
+          <h3 className="mb-3 text-sm font-semibold uppercase text-gray-400">Datas</h3>
           <InfoRow label="Retirada" value={formatDateOnly(rental.pickupDate)} />
           <InfoRow label="Devolução" value={formatDateOnly(rental.returnDate)} />
         </Card>
 
+        {/* Itens da locação */}
+        {rental.items && rental.items.length > 0 && (
+          <Card className="md:col-span-2">
+            <h3 className="mb-3 text-sm font-semibold uppercase text-gray-400">
+              Itens da Locação
+            </h3>
+            <div className="divide-y divide-gray-50">
+              {rental.items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{item.product.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {item.product.code} · Tam. {item.product.size} · {item.product.color}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {item.quantity > 1 && (
+                      <p className="text-xs text-gray-400">{item.quantity}× {formatCurrency(item.unitPrice)}</p>
+                    )}
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatCurrency(Number(item.unitPrice) * item.quantity)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         <Card className="md:col-span-2">
-          <h3 className="mb-3 text-sm font-semibold uppercase text-gray-400">
-            Valores
-          </h3>
+          <h3 className="mb-3 text-sm font-semibold uppercase text-gray-400">Valores</h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl bg-gray-50 p-4">
               <p className="text-xs text-gray-500">Valor total</p>
-              <p className="text-xl font-bold text-gray-900">
-                {formatCurrency(rental.totalValue)}
-              </p>
+              <p className="text-xl font-bold text-gray-900">{formatCurrency(rental.totalValue)}</p>
             </div>
             <div className="rounded-xl bg-green-50 p-4">
               <p className="text-xs text-gray-500">Sinal pago</p>
-              <p className="text-xl font-bold text-green-700">
-                {formatCurrency(rental.depositValue)}
-              </p>
+              <p className="text-xl font-bold text-green-700">{formatCurrency(rental.depositValue)}</p>
             </div>
             <div className="rounded-xl bg-primary-50 p-4">
               <p className="text-xs text-gray-500">Restante</p>
-              <p className="text-xl font-bold text-primary-700">
-                {formatCurrency(rental.remainingValue)}
-              </p>
+              <p className="text-xl font-bold text-primary-700">{formatCurrency(rental.remainingValue)}</p>
             </div>
           </div>
           {rental.notes && (
@@ -152,29 +152,6 @@ export function RentalDetail() {
             </p>
           )}
         </Card>
-
-        {rental.accessories && rental.accessories.length > 0 && (
-          <Card className="md:col-span-2">
-            <h3 className="mb-3 text-sm font-semibold uppercase text-gray-400">
-              Acessórios incluídos
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {rental.accessories.map((ra) => (
-                <span
-                  key={ra.id}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-700"
-                >
-                  {ra.accessory.name}
-                  {ra.quantity > 1 && (
-                    <span className="rounded-full bg-primary-200 px-1.5 py-0.5 text-xs font-bold">
-                      ×{ra.quantity}
-                    </span>
-                  )}
-                </span>
-              ))}
-            </div>
-          </Card>
-        )}
       </div>
 
       {/* Actions */}

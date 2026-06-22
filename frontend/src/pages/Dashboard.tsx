@@ -52,7 +52,7 @@ export function Dashboard() {
       key: 'product',
       header: 'Produto',
       render: (r) => (
-        <span className="font-medium text-gray-900">{r.product?.name}</span>
+        <span className="font-medium text-gray-900">{r.items?.[0]?.product?.name ?? '-'}</span>
       ),
     },
     {

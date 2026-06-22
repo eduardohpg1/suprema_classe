@@ -69,7 +69,7 @@ export async function getCustomer(req: Request, res: Response): Promise<void> {
     include: {
       rentals: {
         orderBy: { pickupDate: 'desc' },
-        include: { product: { select: { id: true, code: true, name: true } } },
+        include: { items: { include: { product: { select: { id: true, code: true, name: true } } }, take: 1 } },
       },
       reservations: {
         orderBy: { date: 'desc' },

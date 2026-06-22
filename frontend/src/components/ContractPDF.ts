@@ -9,7 +9,6 @@ function brl(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
 }
 
-// valor sem o prefixo R$ (para usar quando o label já tem "R$")
 function num(v: number) {
   return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
 }
@@ -17,8 +16,6 @@ function num(v: number) {
 function d(v?: string) {
   if (!v) return '';
   try {
-    // Retirada/devolução são datas sem hora (meia-noite UTC); formatamos pelos
-    // componentes UTC para não deslocar o dia pelo fuso local.
     const date = parseISO(v);
     if (Number.isNaN(date.getTime())) return '';
     const day = String(date.getUTCDate()).padStart(2, '0');
@@ -34,18 +31,8 @@ function parseAddr(raw?: string | null) {
   return { street: sn[0]?.trim() || '', number: sn[1]?.trim() || '', bairro: p[1] || '', cidade: p[2] || '' };
 }
 
-// desenha linha horizontal
 function ln(doc: jsPDF, x1: number, y: number, x2: number) {
   doc.line(x1, y, x2, y);
-}
-
-// escreve label + valor + linha sob o valor
-function fieldLine(doc: jsPDF, label: string, value: string, x: number, y: number, endX: number) {
-  doc.setFont('helvetica', 'normal');
-  doc.text(label, x, y);
-  const lw = doc.getTextWidth(label);
-  if (value) doc.text(value, x + lw + 0.5, y);
-  ln(doc, x + lw + 0.5, y + 1, endX, );
 }
 
 // ─── gerador principal ──────────────────────────────────────────────────────
@@ -56,10 +43,10 @@ export function generateContract(
 ): void {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
-  const PW  = 210;           // largura A4
-  const ML  = 14;            // margem esquerda
-  const MR  = 196;           // margem direita
-  const CX  = PW / 2;        // centro
+  const PW  = 210;
+  const ML  = 14;
+  const MR  = 196;
+  const CX  = PW / 2;
   let y = 0;
 
   const addr = parseAddr(rental.customer?.address);
@@ -87,7 +74,7 @@ export function generateContract(
   y += 2.5;
   doc.setDrawColor(0);
   doc.setLineWidth(0.3);
-  ln(doc, ML, y, MR, y);
+  ln(doc, ML, y, MR);
 
   // ══════════════════════════════════════════════════════════════
   // TÍTULO
@@ -103,104 +90,130 @@ export function generateContract(
   doc.setFontSize(9.5);
   doc.setLineWidth(0.2);
 
-  // Nome do Cliente
   y += 7;
   doc.setFont('helvetica', 'normal');
   doc.text('Nome do Cliente:', ML, y);
   const nomeX = ML + doc.getTextWidth('Nome do Cliente:') + 1;
   doc.text(nome, nomeX, y);
-  ln(doc, nomeX, y + 1, MR, y + 1);
+  ln(doc, nomeX, y + 1, MR);
 
-  // Endereço / N°
   y += 6.5;
   const endLabel = 'Endereço:';
   doc.text(endLabel, ML, y);
   const endX = ML + doc.getTextWidth(endLabel) + 1;
   doc.text(addr.street, endX, y);
-  ln(doc, endX, y + 1, MR - 22, y + 1);
+  ln(doc, endX, y + 1, MR - 22);
   doc.text('N°', MR - 20, y);
   const nrX = MR - 20 + doc.getTextWidth('N°') + 1;
   doc.text(addr.number, nrX, y);
-  ln(doc, nrX, y + 1, MR, y + 1);
+  ln(doc, nrX, y + 1, MR);
 
-  // Bairro / Cidade / Tel
   y += 6.5;
   doc.text('Bairro:', ML, y);
   const bairroX = ML + doc.getTextWidth('Bairro:') + 1;
   doc.text(addr.bairro, bairroX, y);
-  ln(doc, bairroX, y + 1, ML + 47, y + 1);
-
+  ln(doc, bairroX, y + 1, ML + 47);
   doc.text('Cidade:', ML + 49, y);
   const cidX = ML + 49 + doc.getTextWidth('Cidade:') + 1;
   doc.text(addr.cidade, cidX, y);
-  ln(doc, cidX, y + 1, ML + 112, y + 1);
-
+  ln(doc, cidX, y + 1, ML + 112);
   doc.text('Tel:', ML + 114, y);
   const telX = ML + 114 + doc.getTextWidth('Tel:') + 1;
   doc.text(tel, telX, y);
-  ln(doc, telX, y + 1, MR, y + 1);
+  ln(doc, telX, y + 1, MR);
 
-  // RG / CPF
   y += 6.5;
   doc.text('RG:', ML, y);
   const rgX = ML + doc.getTextWidth('RG:') + 1;
   doc.text(rg, rgX, y);
-  ln(doc, rgX, y + 1, ML + 82, y + 1);
-
+  ln(doc, rgX, y + 1, ML + 82);
   doc.text('CPF:', ML + 84, y);
   const cpfX = ML + 84 + doc.getTextWidth('CPF:') + 1;
   doc.text(cpf, cpfX, y);
-  ln(doc, cpfX, y + 1, MR, y + 1);
+  ln(doc, cpfX, y + 1, MR);
 
-  // Mercadoria (3 linhas como no original)
+  // ══════════════════════════════════════════════════════════════
+  // ITENS DA LOCAÇÃO
+  // ══════════════════════════════════════════════════════════════
+  const items = rental.items ?? [];
+  const hasMultiple = items.length > 1;
+
   y += 6.5;
-  const merc = `${rental.product?.name || ''} — Tam. ${rental.product?.size || ''} — Cor: ${rental.product?.color || ''} — Cód: ${rental.product?.code || ''}`;
+  doc.setFont('helvetica', 'bold');
   doc.text('Mercadoria:', ML, y);
-  const mercX = ML + doc.getTextWidth('Mercadoria:') + 1;
-  doc.text(merc, mercX, y);
-  ln(doc, mercX, y + 1, MR, y + 1);
+  doc.setFont('helvetica', 'normal');
 
-  y += 6;
-  ln(doc, ML, y + 1, MR, y + 1);
+  if (!hasMultiple) {
+    // Apenas 1 item — exibe na mesma linha como antes
+    const item = items[0];
+    const product = item?.product;
+    const merc = product
+      ? `${product.name} — Tam. ${product.size} — Cor: ${product.color} — Cód: ${product.code}`
+      : '';
+    const mercX = ML + doc.getTextWidth('Mercadoria:') + 1;
+    doc.text(merc, mercX, y);
+    ln(doc, mercX, y + 1, MR);
+    y += 6;
+    ln(doc, ML, y + 1, MR);
+    y += 6;
+    ln(doc, ML, y + 1, ML + 68);
+  } else {
+    // Múltiplos itens — lista cada um com seu preço
+    ln(doc, ML + doc.getTextWidth('Mercadoria:') + 0.5, y + 1, MR);
+    y += 6;
+    doc.setFontSize(8.5);
+    items.forEach((item) => {
+      const product = item.product;
+      const lineTotal = Number(item.unitPrice) * item.quantity;
+      const qtyLabel = item.quantity > 1 ? ` (${item.quantity}×)` : '';
+      const desc = `${product.name}${qtyLabel} — Tam. ${product.size} — Cor: ${product.color} — Cód: ${product.code}`;
+      doc.text(`• ${desc}`, ML + 2, y);
+      const priceStr = brl(lineTotal);
+      doc.text(priceStr, MR - doc.getTextWidth(priceStr), y);
+      ln(doc, ML, y + 1, MR);
+      y += 5.5;
+    });
+    doc.setFontSize(9.5);
+    ln(doc, ML, y + 1, ML + 68);
+  }
 
-  y += 6;
-  ln(doc, ML, y + 1, ML + 68, y + 1);
-
-  // Valores
+  // ══════════════════════════════════════════════════════════════
+  // VALORES
+  // ══════════════════════════════════════════════════════════════
   y += 7;
   doc.text('Total R$', ML, y);
   const totX = ML + doc.getTextWidth('Total R$') + 1;
   doc.text(num(rental.totalValue), totX, y);
-  ln(doc, totX, y + 1, ML + 68, y + 1);
+  ln(doc, totX, y + 1, ML + 68);
 
   y += 5.5;
   doc.text('Sinal R$', ML, y);
   const sinX = ML + doc.getTextWidth('Sinal R$') + 1;
   doc.text(num(rental.depositValue), sinX, y);
-  ln(doc, sinX, y + 1, ML + 68, y + 1);
+  ln(doc, sinX, y + 1, ML + 68);
 
   y += 5.5;
   doc.text('Restante R$', ML, y);
   const restX = ML + doc.getTextWidth('Restante R$') + 1;
   doc.text(num(rental.remainingValue), restX, y);
-  ln(doc, restX, y + 1, ML + 68, y + 1);
+  ln(doc, restX, y + 1, ML + 68);
 
   // Retirada / APOS AS 14 HORAS / Entrega
   y += 6.5;
   doc.text('Retirada', ML, y);
   const retX = ML + doc.getTextWidth('Retirada') + 1;
   doc.text(d(rental.pickupDate), retX, y);
-  ln(doc, retX, y + 1, ML + 44, y + 1);
+  ln(doc, retX, y + 1, ML + 44);
 
   doc.setFont('helvetica', 'bold');
   doc.text('APOS AS 14 HORAS', ML + 46, y);
   doc.setFont('helvetica', 'normal');
-  ln(doc, ML + 46 + doc.getTextWidth('APOS AS 14 HORAS') + 1, y + 1, ML + 112, y + 1);
+  ln(doc, ML + 46 + doc.getTextWidth('APOS AS 14 HORAS') + 1, y + 1, ML + 112);
 
   doc.text('Entrega', ML + 114, y);
   const entX = ML + 114 + doc.getTextWidth('Entrega') + 1;
   doc.text(d(rental.returnDate), entX, y);
-  ln(doc, entX, y + 1, MR, y + 1);
+  ln(doc, entX, y + 1, MR);
 
   // ══════════════════════════════════════════════════════════════
   // CAIXA ATENÇÃO + TÍTULO CONTRATO
@@ -208,14 +221,12 @@ export function generateContract(
   y += 8;
   doc.setLineWidth(0.5);
 
-  // Caixa ATENÇÃO (negrito)
   const atW = 24;
   doc.rect(ML, y - 5, atW, 6.5);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.text('ATENÇÃO', ML + atW / 2, y - 0.5, { align: 'center' });
 
-  // Caixa TERMOS (itálico bold como no original)
   doc.rect(ML + atW + 0.5, y - 5, MR - ML - atW - 0.5, 6.5);
   doc.setFont('helvetica', 'bolditalic');
   doc.setFontSize(8.5);
@@ -229,7 +240,7 @@ export function generateContract(
   doc.setLineWidth(0.2);
 
   // ══════════════════════════════════════════════════════════════
-  // CLÁUSULAS — centralizadas como no modelo
+  // CLÁUSULAS
   // ══════════════════════════════════════════════════════════════
   y += 5.5;
   doc.setFont('helvetica', 'normal');
@@ -258,7 +269,7 @@ export function generateContract(
   });
 
   // ══════════════════════════════════════════════════════════════
-  // RODAPÉ CONTRATO — data + assinatura + avalistas
+  // RODAPÉ CONTRATO
   // ══════════════════════════════════════════════════════════════
   y += 3;
   if (y > 258) { doc.addPage(); y = 15; }
@@ -266,41 +277,38 @@ export function generateContract(
   doc.setFontSize(9);
   const hoje = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   doc.text(`CAÇAPAVA,`, ML, y);
-  // data separada por blanks como no modelo
   const [dia, , mes, , ano] = hoje.split(' ');
   doc.text(dia,  ML + doc.getTextWidth('CAÇAPAVA,') + 3, y);
-  ln(doc, ML + doc.getTextWidth('CAÇAPAVA,') + 2, y + 1, ML + doc.getTextWidth('CAÇAPAVA,') + 14, y + 1);
+  ln(doc, ML + doc.getTextWidth('CAÇAPAVA,') + 2, y + 1, ML + doc.getTextWidth('CAÇAPAVA,') + 14);
   doc.text('DE', ML + doc.getTextWidth('CAÇAPAVA,') + 16, y);
   doc.text(mes, ML + doc.getTextWidth('CAÇAPAVA,') + 22, y);
-  ln(doc, ML + doc.getTextWidth('CAÇAPAVA,') + 21, y + 1, ML + doc.getTextWidth('CAÇAPAVA,') + 55, y + 1);
+  ln(doc, ML + doc.getTextWidth('CAÇAPAVA,') + 21, y + 1, ML + doc.getTextWidth('CAÇAPAVA,') + 55);
   doc.text('DE', ML + doc.getTextWidth('CAÇAPAVA,') + 57, y);
   doc.text(ano, ML + doc.getTextWidth('CAÇAPAVA,') + 63, y);
-  ln(doc, ML + doc.getTextWidth('CAÇAPAVA,') + 62, y + 1, ML + doc.getTextWidth('CAÇAPAVA,') + 76, y + 1);
+  ln(doc, ML + doc.getTextWidth('CAÇAPAVA,') + 62, y + 1, ML + doc.getTextWidth('CAÇAPAVA,') + 76);
   doc.text('.', ML + doc.getTextWidth('CAÇAPAVA,') + 77, y);
 
-  // ASS RETIRADA à direita na mesma linha
   const assX = MR - 70;
   doc.text('ASS RETIRADA:', assX, y);
-  ln(doc, assX + doc.getTextWidth('ASS RETIRADA:') + 1, y + 1, MR, y + 1);
+  ln(doc, assX + doc.getTextWidth('ASS RETIRADA:') + 1, y + 1, MR);
 
-  // Avalistas
   y += 7;
   doc.text('Avalista(s)', ML, y);
-  ln(doc, ML + doc.getTextWidth('Avalista(s)') + 1, y + 1, ML + 78, y + 1);
+  ln(doc, ML + doc.getTextWidth('Avalista(s)') + 1, y + 1, ML + 78);
 
   y += 6;
   doc.text('CPF/CNPJ', ML, y);
-  ln(doc, ML + doc.getTextWidth('CPF/CNPJ') + 1, y + 1, ML + 78, y + 1);
+  ln(doc, ML + doc.getTextWidth('CPF/CNPJ') + 1, y + 1, ML + 78);
   doc.text('CPF/CNPJ', ML + 80, y);
-  ln(doc, ML + 80 + doc.getTextWidth('CPF/CNPJ') + 1, y + 1, MR, y + 1);
+  ln(doc, ML + 80 + doc.getTextWidth('CPF/CNPJ') + 1, y + 1, MR);
 
   // ══════════════════════════════════════════════════════════════
-  // LINHA TRACEJADA — separador nota promissória
+  // LINHA TRACEJADA
   // ══════════════════════════════════════════════════════════════
   y += 9;
   if (y > 270) { doc.addPage(); y = 15; }
   doc.setLineDash([1.5, 1.5], 0);
-  ln(doc, ML, y, MR, y);
+  ln(doc, ML, y, MR);
   doc.setLineDash([], 0);
 
   // ══════════════════════════════════════════════════════════════
@@ -309,7 +317,6 @@ export function generateContract(
   y += 5;
   doc.setLineWidth(0.3);
 
-  // Coluna lateral esquerda com texto rotacionado
   const colX  = ML;
   const colH  = 48;
   const col1W = 10;
@@ -324,8 +331,7 @@ export function generateContract(
   doc.text('CPF/CNPJ',   colX + col1W + col2W / 2, y + colH - 1, { align: 'center', angle: 90 });
   doc.text('CPF/CNPJ',   colX + col1W + col2W + col2W / 2, y + colH - 1, { align: 'center', angle: 90 });
 
-  // Conteúdo NP
-  const npX = colX + col1W + col2W + col2W + 2; // início após colunas
+  const npX = colX + col1W + col2W + col2W + 2;
   const npW = MR - npX;
   const npY = y;
 
@@ -335,14 +341,12 @@ export function generateContract(
 
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
-  // VENCIMENTO
   const vcX = npX + npW - 70;
   doc.text('VENCIMENTO', vcX, npY + 5);
-  ln(doc, vcX + doc.getTextWidth('VENCIMENTO') + 1, npY + 6, vcX + doc.getTextWidth('VENCIMENTO') + 18, npY + 6);
+  ln(doc, vcX + doc.getTextWidth('VENCIMENTO') + 1, npY + 6, vcX + doc.getTextWidth('VENCIMENTO') + 18);
   doc.text('DE', vcX + doc.getTextWidth('VENCIMENTO') + 20, npY + 5);
-  ln(doc, vcX + doc.getTextWidth('VENCIMENTO') + 24, npY + 6, MR, npY + 6);
+  ln(doc, vcX + doc.getTextWidth('VENCIMENTO') + 24, npY + 6, MR);
 
-  // N° e R$ boxes
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('N°', npX, npY + 13);
@@ -355,29 +359,25 @@ export function generateContract(
   doc.setFontSize(9);
   doc.text(brl(rental.remainingValue), npX + 63, npY + 13);
 
-  // Ao(s)
   doc.setFontSize(8.5);
   const ao = `Ao(s)   ${nome}`;
   doc.text(ao, npX, npY + 21);
-  ln(doc, npX + doc.getTextWidth(ao) + 1, npY + 22, npX + npW, npY + 22);
+  ln(doc, npX + doc.getTextWidth(ao) + 1, npY + 22, npX + npW);
 
-  // linha 2: ___ pagar ___ por esta única via de NOTA PROMISSÓRIA
   const l2y = npY + 28;
-  ln(doc, npX, l2y + 1, npX + 16, l2y + 1);
+  ln(doc, npX, l2y + 1, npX + 16);
   doc.text('pagar', npX + 18, l2y);
-  ln(doc, npX + 18 + doc.getTextWidth('pagar') + 1, l2y + 1, npX + 45, l2y + 1);
+  ln(doc, npX + 18 + doc.getTextWidth('pagar') + 1, l2y + 1, npX + 45);
   doc.setFont('helvetica', 'bold');
   doc.text('por esta única via de NOTA PROMISSÓRIA', npX + 47, l2y);
   doc.setFont('helvetica', 'normal');
 
-  // linha 3: a ___ CPF/CNPJ ___
   const l3y = npY + 34;
   doc.text('a', npX, l3y);
-  ln(doc, npX + 3, l3y + 1, npX + 68, l3y + 1);
+  ln(doc, npX + 3, l3y + 1, npX + 68);
   doc.text('CPF/CNPJ', npX + 70, l3y);
-  ln(doc, npX + 70 + doc.getTextWidth('CPF/CNPJ') + 1, l3y + 1, npX + npW, l3y + 1);
+  ln(doc, npX + 70 + doc.getTextWidth('CPF/CNPJ') + 1, l3y + 1, npX + npW);
 
-  // Ou a sua ordem / Em moeda corrente
   const l4y = npY + 39;
   doc.text('Ou a sua ordem,', npX, l4y);
   doc.text('Em moeda corrente', npX + npW - doc.getTextWidth('Em moeda corrente desse país'), l4y);
@@ -385,40 +385,35 @@ export function generateContract(
   doc.text('a quantia', npX, l5y);
   doc.text('desse país', npX + npW - doc.getTextWidth('desse país'), l5y);
 
-  // Pagável / EMITENTE / CPF / ENDEREÇO / Assinatura
   const l6y = npY + colH + 2;
   if (l6y > 280) { doc.addPage(); y = 15; }
 
   doc.text('Pagável na praça de', npX, l6y);
-  ln(doc, npX + doc.getTextWidth('Pagável na praça de') + 1, l6y + 1, npX + 68, l6y + 1);
+  ln(doc, npX + doc.getTextWidth('Pagável na praça de') + 1, l6y + 1, npX + 68);
 
   const rightCol = npX + 70;
   doc.text('EMITENTE', npX, l6y + 6);
-  ln(doc, npX + doc.getTextWidth('EMITENTE') + 1, l6y + 7, npX + 68, l6y + 7);
+  ln(doc, npX + doc.getTextWidth('EMITENTE') + 1, l6y + 7, npX + 68);
   doc.text(`CAÇAPAVA, ${d(rental.returnDate)}`, rightCol, l6y + 6);
 
   doc.text('CPF/CNPJ', npX, l6y + 12);
   doc.text(cpf, npX + doc.getTextWidth('CPF/CNPJ') + 1, l6y + 12);
-  ln(doc, npX + doc.getTextWidth('CPF/CNPJ') + 1, l6y + 13, npX + 68, l6y + 13);
+  ln(doc, npX + doc.getTextWidth('CPF/CNPJ') + 1, l6y + 13, npX + 68);
 
   doc.text('ENDEREÇO', npX, l6y + 18);
-  ln(doc, npX + doc.getTextWidth('ENDEREÇO') + 1, l6y + 19, npX + 68, l6y + 19);
-  ln(doc, rightCol, l6y + 19, npX + npW, l6y + 19);
+  ln(doc, npX + doc.getTextWidth('ENDEREÇO') + 1, l6y + 19, npX + 68);
+  ln(doc, rightCol, l6y + 19, npX + npW);
   doc.text('Assinatura', rightCol + (npX + npW - rightCol) / 2 - doc.getTextWidth('Assinatura') / 2, l6y + 23);
 
-  // ── saída: imprimir ou baixar ───────────────────────────────
+  // ── saída ───────────────────────────────────────────────────
   const slug = (nome || 'cliente')
     .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
   if (action === 'print') {
-    // Abre o mesmo PDF do contrato já no diálogo de impressão do navegador.
     doc.autoPrint();
     const blobUrl = doc.output('bloburl');
     const win = window.open(blobUrl, '_blank');
-    // Fallback: se o popup for bloqueado, baixa o PDF para impressão manual.
-    if (!win) {
-      doc.save(`contrato-${slug}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-    }
+    if (!win) doc.save(`contrato-${slug}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     return;
   }
 

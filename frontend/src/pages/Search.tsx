@@ -132,7 +132,7 @@ export function Search() {
                     >
                       <div>
                         <span className="font-medium text-gray-900">
-                          {r.product?.name}
+                          {r.items?.[0]?.product?.name ?? '-'}
                         </span>
                         <span className="ml-2 text-sm text-gray-400">
                           {r.customer?.name}

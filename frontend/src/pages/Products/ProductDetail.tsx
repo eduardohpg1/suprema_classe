@@ -64,7 +64,7 @@ export function ProductDetail() {
   const current = photos[activePhoto];
 
   const upcomingRentals = (rentals?.data ?? []).filter(
-    (r) => r.product?.id === product.id && r.status === 'ACTIVE'
+    (r) => r.items?.some((i) => i.product?.id === product.id) && r.status === 'ACTIVE'
   );
 
   const rentalColumns: Column<Rental>[] = [

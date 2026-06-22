@@ -11,7 +11,6 @@ const periodSchema = z.object({
 
 /**
  * GET /reports/rentals?startDate=&endDate=
- * Locacoes (nao canceladas) com retirada dentro do periodo + total faturado.
  */
 export async function rentalsByPeriod(req: Request, res: Response): Promise<void> {
   const { startDate, endDate } = periodSchema.parse(req.query);
@@ -26,7 +25,10 @@ export async function rentalsByPeriod(req: Request, res: Response): Promise<void
       status: { not: 'CANCELLED' },
     },
     include: {
-      product: { select: { id: true, code: true, name: true } },
+      items: {
+        include: { product: { select: { id: true, code: true, name: true } } },
+        take: 1,
+      },
       customer: { select: { id: true, name: true } },
     },
     orderBy: { pickupDate: 'asc' },
@@ -52,16 +54,16 @@ const limitSchema = z.object({
 
 /**
  * GET /reports/most-rented?limit=10
- * Produtos mais locados (conta locacoes nao canceladas).
+ * Produtos mais locados via RentalItem (suporte a multiplos produtos por locacao).
  */
 export async function mostRentedProducts(req: Request, res: Response): Promise<void> {
   const { limit } = limitSchema.parse(req.query);
 
-  const grouped = await prisma.rental.groupBy({
+  const grouped = await prisma.rentalItem.groupBy({
     by: ['productId'],
-    where: { status: { not: 'CANCELLED' } },
+    where: { rental: { status: { not: 'CANCELLED' } } },
     _count: { productId: true },
-    _sum: { totalValue: true },
+    _sum: { unitPrice: true },
     orderBy: { _count: { productId: 'desc' } },
     take: limit,
   });
@@ -76,7 +78,7 @@ export async function mostRentedProducts(req: Request, res: Response): Promise<v
   const result = grouped.map((g) => ({
     product: productMap.get(g.productId) ?? null,
     rentalCount: g._count.productId,
-    totalRevenue: (g._sum.totalValue ?? new Prisma.Decimal(0)).toFixed(2),
+    totalRevenue: (g._sum.unitPrice ?? new Prisma.Decimal(0)).toFixed(2),
   }));
 
   res.json({ limit, products: result });
@@ -88,7 +90,6 @@ const yearSchema = z.object({
 
 /**
  * GET /reports/monthly-revenue?year=YYYY
- * Faturamento por mes do ano (12 entradas), baseado na data de retirada.
  */
 export async function monthlyRevenue(req: Request, res: Response): Promise<void> {
   const { year } = yearSchema.parse(req.query);
@@ -104,7 +105,6 @@ export async function monthlyRevenue(req: Request, res: Response): Promise<void>
     select: { pickupDate: true, totalValue: true },
   });
 
-  // Inicializa 12 meses zerados.
   const months = Array.from({ length: 12 }, (_, i) => ({
     month: i + 1,
     revenue: new Prisma.Decimal(0),
@@ -112,7 +112,7 @@ export async function monthlyRevenue(req: Request, res: Response): Promise<void>
   }));
 
   rentals.forEach((r) => {
-    const m = r.pickupDate.getUTCMonth(); // 0-based
+    const m = r.pickupDate.getUTCMonth();
     months[m].revenue = months[m].revenue.add(r.totalValue);
     months[m].count += 1;
   });
@@ -132,7 +132,6 @@ export async function monthlyRevenue(req: Request, res: Response): Promise<void>
 
 /**
  * GET /reports/recurring-customers
- * Clientes com mais de uma locacao (nao cancelada), ordenados por contagem.
  */
 export async function recurringCustomers(_req: Request, res: Response): Promise<void> {
   const grouped = await prisma.rental.groupBy({
@@ -162,7 +161,6 @@ export async function recurringCustomers(_req: Request, res: Response): Promise<
 
 /**
  * GET /reports/available-products
- * Lista produtos atualmente disponiveis.
  */
 export async function availableProducts(_req: Request, res: Response): Promise<void> {
   const products = await prisma.product.findMany({

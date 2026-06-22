@@ -14,14 +14,14 @@ const RENTAL_STATUSES = ['ACTIVE', 'RETURNED', 'OVERDUE', 'CANCELLED'] as const;
 
 const dateSchema = z.coerce.date();
 
-const accessoryItemSchema = z.object({
-  accessoryId: z.string().min(1),
+const rentalItemSchema = z.object({
+  productId: z.string().min(1),
   quantity: z.coerce.number().int().positive().default(1),
 });
 
 const createRentalSchema = z
   .object({
-    productId: z.string().min(1, 'Produto obrigatorio.'),
+    items: z.array(rentalItemSchema).min(1, 'Adicione ao menos um produto.'),
     customerId: z.string().min(1, 'Cliente obrigatorio.'),
     pickupDate: dateSchema,
     returnDate: dateSchema,
@@ -29,7 +29,6 @@ const createRentalSchema = z
     depositValue: z.coerce.number().nonnegative('Valor de sinal invalido.').default(0),
     remainingValue: z.coerce.number().nonnegative('Valor restante invalido.').optional(),
     notes: z.string().max(1000).optional().nullable(),
-    accessories: z.array(accessoryItemSchema).optional().default([]),
   })
   .refine((d) => d.returnDate >= d.pickupDate, {
     message: 'Data de devolucao deve ser igual ou posterior a data de retirada.',
@@ -45,11 +44,9 @@ const updateRentalSchema = z
     remainingValue: z.coerce.number().nonnegative().optional(),
     notes: z.string().max(1000).optional().nullable(),
     status: z.enum(RENTAL_STATUSES).optional(),
-    accessories: z.array(accessoryItemSchema).optional(),
   })
   .refine(
-    (d) =>
-      !d.pickupDate || !d.returnDate || d.returnDate >= d.pickupDate,
+    (d) => !d.pickupDate || !d.returnDate || d.returnDate >= d.pickupDate,
     {
       message: 'Data de devolucao deve ser igual ou posterior a data de retirada.',
       path: ['returnDate'],
@@ -57,22 +54,22 @@ const updateRentalSchema = z
   );
 
 const rentalInclude = {
-  product: {
-    select: { id: true, code: true, name: true, size: true, color: true, status: true },
-  },
   customer: {
     select: { id: true, name: true, cpf: true, rg: true, phone: true, address: true },
   },
-  contract: true,
-  accessories: {
-    include: { accessory: { select: { id: true, name: true } } },
-    orderBy: { accessory: { name: 'asc' } },
+  items: {
+    include: {
+      product: {
+        select: { id: true, code: true, name: true, size: true, color: true, status: true, rentalPrice: true },
+      },
+    },
+    orderBy: { product: { name: 'asc' } },
   },
+  contract: true,
 } satisfies Prisma.RentalInclude;
 
 /**
  * GET /rentals
- * Filtros: status, customerId, productId, from, to (intervalo sobre pickupDate).
  */
 export async function listRentals(req: Request, res: Response): Promise<void> {
   const pagination = getPagination(req);
@@ -84,7 +81,9 @@ export async function listRentals(req: Request, res: Response): Promise<void> {
     where.status = status as Prisma.RentalWhereInput['status'];
   }
   if (typeof customerId === 'string' && customerId) where.customerId = customerId;
-  if (typeof productId === 'string' && productId) where.productId = productId;
+  if (typeof productId === 'string' && productId) {
+    where.items = { some: { productId } };
+  }
 
   if (typeof from === 'string' && from) {
     where.pickupDate = { ...(where.pickupDate as object), gte: new Date(from) };
@@ -116,17 +115,13 @@ export async function getRental(req: Request, res: Response): Promise<void> {
     include: rentalInclude,
   });
 
-  if (!rental) {
-    throw new AppError(404, 'Locacao nao encontrada.');
-  }
+  if (!rental) throw new AppError(404, 'Locacao nao encontrada.');
 
   res.json(rental);
 }
 
 /**
  * POST /rentals
- * CRITICO: verifica conflito de datas dentro de uma transacao Serializable
- * (previne double-booking em concorrencia) e atualiza o status do produto.
  */
 export async function createRental(req: Request, res: Response): Promise<void> {
   const data = createRentalSchema.parse(req.body);
@@ -136,41 +131,41 @@ export async function createRental(req: Request, res: Response): Promise<void> {
 
   const rental = await prisma.$transaction(
     async (tx) => {
-      // Valida existencia de produto e cliente.
-      const product = await tx.product.findUnique({
-        where: { id: data.productId },
-        select: { id: true, status: true },
-      });
-      if (!product) {
-        throw new AppError(400, 'Produto informado nao existe.');
-      }
-      if (product.status === 'MAINTENANCE') {
-        throw new AppError(409, 'Produto esta em manutencao e nao pode ser locado.');
+      // Valida cliente
+      const customer = await tx.customer.findUnique({ where: { id: data.customerId }, select: { id: true } });
+      if (!customer) throw new AppError(400, 'Cliente informado nao existe.');
+
+      // Valida cada produto e verifica disponibilidade
+      for (const item of data.items) {
+        const product = await tx.product.findUnique({
+          where: { id: item.productId },
+          select: { id: true, status: true, rentalPrice: true },
+        });
+        if (!product) throw new AppError(400, `Produto ${item.productId} nao existe.`);
+        if (product.status === 'MAINTENANCE') {
+          throw new AppError(409, 'Um dos produtos esta em manutencao.');
+        }
+
+        const available = await checkProductAvailability(
+          item.productId,
+          data.pickupDate,
+          data.returnDate,
+          undefined,
+          tx,
+        );
+        if (!available) throw new AvailabilityConflictError();
       }
 
-      const customer = await tx.customer.findUnique({
-        where: { id: data.customerId },
-        select: { id: true },
+      // Busca preços atuais dos produtos
+      const productIds = data.items.map((i) => i.productId);
+      const products = await tx.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, rentalPrice: true },
       });
-      if (!customer) {
-        throw new AppError(400, 'Cliente informado nao existe.');
-      }
-
-      // Verificacao de conflito DENTRO da transacao (fonte da verdade).
-      const available = await checkProductAvailability(
-        data.productId,
-        data.pickupDate,
-        data.returnDate,
-        undefined,
-        tx,
-      );
-      if (!available) {
-        throw new AvailabilityConflictError();
-      }
+      const priceMap = Object.fromEntries(products.map((p) => [p.id, p.rentalPrice]));
 
       const created = await tx.rental.create({
         data: {
-          productId: data.productId,
           customerId: data.customerId,
           pickupDate: data.pickupDate,
           returnDate: data.returnDate,
@@ -179,21 +174,20 @@ export async function createRental(req: Request, res: Response): Promise<void> {
           remainingValue: new Prisma.Decimal(remainingValue),
           notes: data.notes ?? null,
           status: 'ACTIVE',
-          accessories: data.accessories?.length
-            ? {
-                create: data.accessories.map((a) => ({
-                  accessoryId: a.accessoryId,
-                  quantity: a.quantity,
-                })),
-              }
-            : undefined,
+          items: {
+            create: data.items.map((item) => ({
+              productId: item.productId,
+              unitPrice: priceMap[item.productId] ?? new Prisma.Decimal(0),
+              quantity: item.quantity,
+            })),
+          },
         },
         include: rentalInclude,
       });
 
-      // Marca o produto como RENTED.
-      await tx.product.update({
-        where: { id: data.productId },
+      // Marca todos os produtos como RENTED
+      await tx.product.updateMany({
+        where: { id: { in: productIds } },
         data: { status: 'RENTED' },
       });
 
@@ -207,7 +201,6 @@ export async function createRental(req: Request, res: Response): Promise<void> {
 
 /**
  * PUT /rentals/:id
- * Permite atualizar datas/valores/notas. Se datas mudarem, revalida conflito.
  */
 export async function updateRental(req: Request, res: Response): Promise<void> {
   const data = updateRentalSchema.parse(req.body);
@@ -215,60 +208,39 @@ export async function updateRental(req: Request, res: Response): Promise<void> {
 
   const rental = await prisma.$transaction(
     async (tx) => {
-      const existing = await tx.rental.findUnique({ where: { id: rentalId } });
-      if (!existing) {
-        throw new AppError(404, 'Locacao nao encontrada.');
-      }
+      const existing = await tx.rental.findUnique({
+        where: { id: rentalId },
+        include: { items: { select: { productId: true } } },
+      });
+      if (!existing) throw new AppError(404, 'Locacao nao encontrada.');
 
       const newPickup = data.pickupDate ?? existing.pickupDate;
       const newReturn = data.returnDate ?? existing.returnDate;
-
-      // Revalida conflito apenas se datas mudaram e a locacao continua bloqueante.
-      const datesChanged =
-        data.pickupDate !== undefined || data.returnDate !== undefined;
+      const datesChanged = data.pickupDate !== undefined || data.returnDate !== undefined;
       const targetStatus = data.status ?? existing.status;
       const stillBlocking = BLOCKING_RENTAL_STATUSES.includes(targetStatus);
 
       if (datesChanged && stillBlocking) {
-        const available = await checkProductAvailability(
-          existing.productId,
-          newPickup,
-          newReturn,
-          rentalId,
-          tx,
-        );
-        if (!available) {
-          throw new AvailabilityConflictError();
+        for (const item of existing.items) {
+          const available = await checkProductAvailability(
+            item.productId,
+            newPickup,
+            newReturn,
+            rentalId,
+            tx,
+          );
+          if (!available) throw new AvailabilityConflictError();
         }
       }
 
       const updateData: Prisma.RentalUpdateInput = {};
       if (data.pickupDate !== undefined) updateData.pickupDate = data.pickupDate;
       if (data.returnDate !== undefined) updateData.returnDate = data.returnDate;
-      if (data.totalValue !== undefined) {
-        updateData.totalValue = new Prisma.Decimal(data.totalValue);
-      }
-      if (data.depositValue !== undefined) {
-        updateData.depositValue = new Prisma.Decimal(data.depositValue);
-      }
-      if (data.remainingValue !== undefined) {
-        updateData.remainingValue = new Prisma.Decimal(data.remainingValue);
-      }
+      if (data.totalValue !== undefined) updateData.totalValue = new Prisma.Decimal(data.totalValue);
+      if (data.depositValue !== undefined) updateData.depositValue = new Prisma.Decimal(data.depositValue);
+      if (data.remainingValue !== undefined) updateData.remainingValue = new Prisma.Decimal(data.remainingValue);
       if (data.notes !== undefined) updateData.notes = data.notes;
       if (data.status !== undefined) updateData.status = data.status;
-
-      if (data.accessories !== undefined) {
-        await tx.rentalAccessory.deleteMany({ where: { rentalId } });
-        if (data.accessories.length > 0) {
-          await tx.rentalAccessory.createMany({
-            data: data.accessories.map((a) => ({
-              rentalId,
-              accessoryId: a.accessoryId,
-              quantity: a.quantity,
-            })),
-          });
-        }
-      }
 
       const updated = await tx.rental.update({
         where: { id: rentalId },
@@ -276,27 +248,25 @@ export async function updateRental(req: Request, res: Response): Promise<void> {
         include: rentalInclude,
       });
 
-      // Se o status mudou, sincroniza o estado do produto.
+      // Sincroniza status dos produtos se status mudou
       if (data.status !== undefined && data.status !== existing.status) {
+        const productIds = existing.items.map((i) => i.productId);
+
         if (data.status === 'RETURNED' || data.status === 'CANCELLED') {
-          // Locacao saiu de ativa: libera produto se nao houver outra ativa.
-          const otherActive = await tx.rental.count({
-            where: {
-              productId: existing.productId,
-              status: { in: BLOCKING_RENTAL_STATUSES },
-              id: { not: rentalId },
-            },
-          });
-          if (otherActive === 0) {
-            await tx.product.update({
-              where: { id: existing.productId },
-              data: { status: 'AVAILABLE' },
+          for (const productId of productIds) {
+            const otherActive = await tx.rentalItem.count({
+              where: {
+                productId,
+                rental: { status: { in: BLOCKING_RENTAL_STATUSES }, id: { not: rentalId } },
+              },
             });
+            if (otherActive === 0) {
+              await tx.product.update({ where: { id: productId }, data: { status: 'AVAILABLE' } });
+            }
           }
         } else if (BLOCKING_RENTAL_STATUSES.includes(data.status)) {
-          // Locacao voltou a ativa: marca produto como RENTED.
-          await tx.product.update({
-            where: { id: existing.productId },
+          await tx.product.updateMany({
+            where: { id: { in: productIds } },
             data: { status: 'RENTED' },
           });
         }
@@ -312,22 +282,18 @@ export async function updateRental(req: Request, res: Response): Promise<void> {
 
 /**
  * POST /rentals/:id/return
- * Marca a locacao como devolvida e libera o produto (AVAILABLE).
  */
 export async function returnRental(req: Request, res: Response): Promise<void> {
   const rentalId = req.params.id;
 
   const rental = await prisma.$transaction(async (tx) => {
-    const existing = await tx.rental.findUnique({ where: { id: rentalId } });
-    if (!existing) {
-      throw new AppError(404, 'Locacao nao encontrada.');
-    }
-    if (existing.status === 'RETURNED') {
-      throw new AppError(409, 'Esta locacao ja foi devolvida.');
-    }
-    if (existing.status === 'CANCELLED') {
-      throw new AppError(409, 'Locacao cancelada nao pode ser devolvida.');
-    }
+    const existing = await tx.rental.findUnique({
+      where: { id: rentalId },
+      include: { items: { select: { productId: true } } },
+    });
+    if (!existing) throw new AppError(404, 'Locacao nao encontrada.');
+    if (existing.status === 'RETURNED') throw new AppError(409, 'Esta locacao ja foi devolvida.');
+    if (existing.status === 'CANCELLED') throw new AppError(409, 'Locacao cancelada nao pode ser devolvida.');
 
     const updated = await tx.rental.update({
       where: { id: rentalId },
@@ -335,19 +301,55 @@ export async function returnRental(req: Request, res: Response): Promise<void> {
       include: rentalInclude,
     });
 
-    // Libera o produto somente se nao houver outra locacao ativa para ele.
-    const otherActive = await tx.rental.count({
-      where: {
-        productId: existing.productId,
-        status: { in: BLOCKING_RENTAL_STATUSES },
-        id: { not: rentalId },
-      },
-    });
-    if (otherActive === 0) {
-      await tx.product.update({
-        where: { id: existing.productId },
-        data: { status: 'AVAILABLE' },
+    for (const item of existing.items) {
+      const otherActive = await tx.rentalItem.count({
+        where: {
+          productId: item.productId,
+          rental: { status: { in: BLOCKING_RENTAL_STATUSES }, id: { not: rentalId } },
+        },
       });
+      if (otherActive === 0) {
+        await tx.product.update({ where: { id: item.productId }, data: { status: 'AVAILABLE' } });
+      }
+    }
+
+    return updated;
+  });
+
+  res.json(rental);
+}
+
+/**
+ * POST /rentals/:id/cancel
+ */
+export async function cancelRental(req: Request, res: Response): Promise<void> {
+  const rentalId = req.params.id;
+
+  const rental = await prisma.$transaction(async (tx) => {
+    const existing = await tx.rental.findUnique({
+      where: { id: rentalId },
+      include: { items: { select: { productId: true } } },
+    });
+    if (!existing) throw new AppError(404, 'Locacao nao encontrada.');
+    if (existing.status === 'CANCELLED') throw new AppError(409, 'Esta locacao ja esta cancelada.');
+    if (existing.status === 'RETURNED') throw new AppError(409, 'Locacao ja devolvida nao pode ser cancelada.');
+
+    const updated = await tx.rental.update({
+      where: { id: rentalId },
+      data: { status: 'CANCELLED' },
+      include: rentalInclude,
+    });
+
+    for (const item of existing.items) {
+      const otherActive = await tx.rentalItem.count({
+        where: {
+          productId: item.productId,
+          rental: { status: { in: BLOCKING_RENTAL_STATUSES }, id: { not: rentalId } },
+        },
+      });
+      if (otherActive === 0) {
+        await tx.product.update({ where: { id: item.productId }, data: { status: 'AVAILABLE' } });
+      }
     }
 
     return updated;
@@ -358,79 +360,33 @@ export async function returnRental(req: Request, res: Response): Promise<void> {
 
 /**
  * DELETE /rentals/:id
- * Remove a locacao permanentemente e libera o produto se necessario.
  */
 export async function deleteRental(req: Request, res: Response): Promise<void> {
   const rentalId = req.params.id;
 
   await prisma.$transaction(async (tx) => {
-    const existing = await tx.rental.findUnique({ where: { id: rentalId } });
-    if (!existing) {
-      throw new AppError(404, 'Locacao nao encontrada.');
-    }
+    const existing = await tx.rental.findUnique({
+      where: { id: rentalId },
+      include: { items: { select: { productId: true } } },
+    });
+    if (!existing) throw new AppError(404, 'Locacao nao encontrada.');
 
     await tx.rental.delete({ where: { id: rentalId } });
 
     if (BLOCKING_RENTAL_STATUSES.includes(existing.status)) {
-      const otherActive = await tx.rental.count({
-        where: {
-          productId: existing.productId,
-          status: { in: BLOCKING_RENTAL_STATUSES },
-        },
-      });
-      if (otherActive === 0) {
-        await tx.product.update({
-          where: { id: existing.productId },
-          data: { status: 'AVAILABLE' },
+      for (const item of existing.items) {
+        const otherActive = await tx.rentalItem.count({
+          where: {
+            productId: item.productId,
+            rental: { status: { in: BLOCKING_RENTAL_STATUSES } },
+          },
         });
+        if (otherActive === 0) {
+          await tx.product.update({ where: { id: item.productId }, data: { status: 'AVAILABLE' } });
+        }
       }
     }
   });
 
   res.status(204).end();
-}
-
-/**
- * POST /rentals/:id/cancel
- * Cancela a locacao e libera o produto se nao houver outra ativa.
- */
-export async function cancelRental(req: Request, res: Response): Promise<void> {
-  const rentalId = req.params.id;
-
-  const rental = await prisma.$transaction(async (tx) => {
-    const existing = await tx.rental.findUnique({ where: { id: rentalId } });
-    if (!existing) {
-      throw new AppError(404, 'Locacao nao encontrada.');
-    }
-    if (existing.status === 'CANCELLED') {
-      throw new AppError(409, 'Esta locacao ja esta cancelada.');
-    }
-    if (existing.status === 'RETURNED') {
-      throw new AppError(409, 'Locacao ja devolvida nao pode ser cancelada.');
-    }
-
-    const updated = await tx.rental.update({
-      where: { id: rentalId },
-      data: { status: 'CANCELLED' },
-      include: rentalInclude,
-    });
-
-    const otherActive = await tx.rental.count({
-      where: {
-        productId: existing.productId,
-        status: { in: BLOCKING_RENTAL_STATUSES },
-        id: { not: rentalId },
-      },
-    });
-    if (otherActive === 0) {
-      await tx.product.update({
-        where: { id: existing.productId },
-        data: { status: 'AVAILABLE' },
-      });
-    }
-
-    return updated;
-  });
-
-  res.json(rental);
 }

@@ -4,12 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, CheckCircle2, Plus, Minus } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, Plus, Minus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getProducts, getProduct } from '../../api/products';
+import { getProducts } from '../../api/products';
 import { getCustomers } from '../../api/customers';
 import { createRental, RentalPayload } from '../../api/rentals';
-import { getAccessories } from '../../api/accessories';
 import { checkAvailability } from '../../api/availability';
 import { useDebounce } from '../../hooks/useDebounce';
 import { ProductCalendar } from '../../components/ProductCalendar';
@@ -17,11 +16,10 @@ import { Button } from '../../components/UI/Button';
 import { Input } from '../../components/UI/Input';
 import { Select } from '../../components/UI/Select';
 import { formatCurrency } from '../../lib/format';
-import { AvailabilityDay } from '../../types';
+import { AvailabilityDay, Product } from '../../types';
 
 const schema = z
   .object({
-    productId: z.string().min(1, 'Selecione um produto'),
     customerId: z.string().min(1, 'Selecione um cliente'),
     pickupDate: z.string().min(1, 'Informe a data de retirada'),
     returnDate: z.string().min(1, 'Informe a data de devolução'),
@@ -37,32 +35,37 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
+interface SelectedItem {
+  product: Product;
+  quantity: number;
+}
+
 export function RentalForm() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const preselectedProduct = searchParams.get('productId') || '';
 
   const [productSearch, setProductSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const debouncedProduct = useDebounce(productSearch, 350);
   const debouncedCustomer = useDebounce(customerSearch, 350);
-  const [availability, setAvailability] = useState<
+
+  // Produto principal (para calendário)
+  const [mainProductId, setMainProductId] = useState(searchParams.get('productId') || '');
+  // Itens selecionados na locação
+  const [items, setItems] = useState<SelectedItem[]>([]);
+  const [calendarAvailability, setCalendarAvailability] = useState<
     'unknown' | 'checking' | 'available' | 'conflict'
   >('unknown');
-  const [selectedAccessories, setSelectedAccessories] = useState<
-    Record<string, number>
-  >({});
 
   const { data: productsData } = useQuery(
     ['products-select', debouncedProduct],
-    () => getProducts({ search: debouncedProduct, pageSize: 20 })
+    () => getProducts({ search: debouncedProduct, pageSize: 30, status: 'AVAILABLE' })
   );
   const { data: customersData } = useQuery(
     ['customers-select', debouncedCustomer],
     () => getCustomers({ search: debouncedCustomer, pageSize: 20 })
   );
-  const { data: accessoriesData = [] } = useQuery('accessories', getAccessories);
 
   const {
     register,
@@ -74,35 +77,26 @@ export function RentalForm() {
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      productId: preselectedProduct,
       totalValue: 0,
       depositValue: 0,
       remainingValue: 0,
     },
   });
 
-  const productId = watch('productId');
   const pickupDate = watch('pickupDate');
   const returnDate = watch('returnDate');
   const totalValue = watch('totalValue');
   const depositValue = watch('depositValue');
 
-  // Busca preço do produto selecionado para sugerir total
-  const { data: selectedProduct } = useQuery(
-    ['product', productId],
-    () => getProduct(productId),
-    { enabled: !!productId }
-  );
-
-  // Sugere valor total = preço de locação ao escolher produto (se ainda zero)
+  // Auto-calcula total com base nos itens
   useEffect(() => {
-    if (selectedProduct && (!totalValue || totalValue === 0)) {
-      setValue('totalValue', selectedProduct.rentalPrice);
+    const sum = items.reduce((acc, i) => acc + Number(i.product.rentalPrice) * i.quantity, 0);
+    if (sum > 0) {
+      setValue('totalValue', Math.round(sum * 100) / 100);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProduct]);
+  }, [items, setValue]);
 
-  // Sinal = 50% do total (editável); restante = total - sinal
+  // Sinal = 50% do total; restante = total - sinal
   useEffect(() => {
     const total = Number(totalValue) || 0;
     setValue('depositValue', Math.round((total / 2) * 100) / 100);
@@ -116,35 +110,63 @@ export function RentalForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalValue, depositValue]);
 
-  // Verifica disponibilidade ao mudar produto/datas
+  // Verifica disponibilidade do produto principal para o calendário
   useEffect(() => {
-    if (!productId || !pickupDate || !returnDate) {
-      setAvailability('unknown');
+    if (!mainProductId || !pickupDate || !returnDate) {
+      setCalendarAvailability('unknown');
       return;
     }
     if (new Date(returnDate) < new Date(pickupDate)) {
-      setAvailability('conflict');
+      setCalendarAvailability('conflict');
       return;
     }
     let cancelled = false;
-    setAvailability('checking');
-    checkAvailability(productId, pickupDate, returnDate)
+    setCalendarAvailability('checking');
+    checkAvailability(mainProductId, pickupDate, returnDate)
       .then((res) => {
-        if (!cancelled)
-          setAvailability(res.available ? 'available' : 'conflict');
+        if (!cancelled) setCalendarAvailability(res.available ? 'available' : 'conflict');
       })
       .catch(() => {
-        if (!cancelled) setAvailability('unknown');
+        if (!cancelled) setCalendarAvailability('unknown');
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [productId, pickupDate, returnDate]);
+    return () => { cancelled = true; };
+  }, [mainProductId, pickupDate, returnDate]);
+
+  const addItem = (product: Product) => {
+    if (items.find((i) => i.product.id === product.id)) {
+      toast.error('Este produto já foi adicionado.');
+      return;
+    }
+    setItems((prev) => [...prev, { product, quantity: 1 }]);
+    if (!mainProductId) setMainProductId(product.id);
+    setProductSearch('');
+  };
+
+  const removeItem = (productId: string) => {
+    setItems((prev) => {
+      const next = prev.filter((i) => i.product.id !== productId);
+      if (mainProductId === productId) {
+        setMainProductId(next[0]?.product.id || '');
+      }
+      return next;
+    });
+  };
+
+  const changeQty = (productId: string, delta: number) => {
+    setItems((prev) =>
+      prev.map((i) =>
+        i.product.id === productId
+          ? { ...i, quantity: Math.max(1, i.quantity + delta) }
+          : i
+      )
+    );
+  };
 
   const mutation = useMutation(
     (values: FormValues) => {
+      if (items.length === 0) throw new Error('Adicione ao menos um produto.');
       const payload: RentalPayload = {
-        productId: values.productId,
+        items: items.map((i) => ({ productId: i.product.id, quantity: i.quantity })),
         customerId: values.customerId,
         pickupDate: values.pickupDate,
         returnDate: values.returnDate,
@@ -152,9 +174,6 @@ export function RentalForm() {
         depositValue: Number(values.depositValue),
         remainingValue: Number(values.remainingValue),
         notes: values.notes || undefined,
-        accessories: Object.entries(selectedAccessories)
-          .filter(([, qty]) => qty > 0)
-          .map(([accessoryId, quantity]) => ({ accessoryId, quantity })),
       };
       return createRental(payload);
     },
@@ -164,28 +183,29 @@ export function RentalForm() {
         queryClient.invalidateQueries('rentals');
         navigate(`/locacoes/${rental.id}`);
       },
-      // Erros 409 (conflito) já são tratados no interceptor.
-      onError: () => {},
+      onError: (err: Error) => {
+        toast.error(err.message || 'Erro ao criar locação.');
+      },
     }
   );
 
   const onSubmit = (values: FormValues) => {
-    if (availability === 'conflict') {
-      toast.error('Há conflito de datas para este produto. Ajuste o período.');
+    if (items.length === 0) {
+      toast.error('Adicione ao menos um produto.');
+      return;
+    }
+    if (calendarAvailability === 'conflict') {
+      toast.error('Há conflito de datas para um dos produtos. Ajuste o período.');
       return;
     }
     mutation.mutate(values);
   };
 
-  // Seleção de datas pelo calendário: 1º clique define a retirada,
-  // 2º clique (em data igual/posterior) define a devolução.
   const handleCalendarSelect = (date: string, day?: AvailabilityDay) => {
     if (day?.status === 'rented') {
       toast.error('Esse dia já está alugado para este produto.');
       return;
     }
-    // Reinicia a seleção se: não há retirada, o período já está completo,
-    // ou clicou em um dia anterior à retirada.
     if (!pickupDate || returnDate || date < pickupDate) {
       setValue('pickupDate', date, { shouldValidate: true });
       setValue('returnDate', '', { shouldValidate: false });
@@ -194,23 +214,20 @@ export function RentalForm() {
     }
   };
 
-  const productOptions = useMemo(
-    () =>
-      (productsData?.data ?? []).map((p) => ({
-        value: p.id,
-        label: `${p.name} (${p.code})`,
-      })),
-    [productsData]
-  );
-
   const customerOptions = useMemo(
-    () =>
-      (customersData?.data ?? []).map((c) => ({
-        value: c.id,
-        label: `${c.name}`,
-      })),
+    () => (customersData?.data ?? []).map((c) => ({ value: c.id, label: c.name })),
     [customersData]
   );
+
+  const productOptions = useMemo(
+    () =>
+      (productsData?.data ?? [])
+        .filter((p) => !items.find((i) => i.product.id === p.id))
+        .map((p) => ({ value: p.id, label: `${p.name} (${p.code}) — ${formatCurrency(p.rentalPrice)}` })),
+    [productsData, items]
+  );
+
+  const mainProduct = items.find((i) => i.product.id === mainProductId)?.product;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -227,29 +244,94 @@ export function RentalForm() {
         onSubmit={handleSubmit(onSubmit)}
         className="grid grid-cols-1 gap-6 lg:grid-cols-2"
       >
-        {/* Coluna esquerda - dados */}
+        {/* Coluna esquerda */}
         <div className="space-y-5 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          {/* Produto */}
-          <div className="space-y-2">
-            <Input
-              label="Buscar produto"
-              placeholder="Nome ou código..."
-              value={productSearch}
-              onChange={(e) => setProductSearch(e.target.value)}
-            />
-            <Controller
-              name="productId"
-              control={control}
-              render={({ field }) => (
-                <Select
-                  placeholder="Selecione o produto"
-                  options={productOptions}
-                  error={errors.productId?.message}
-                  value={field.value}
-                  onChange={field.onChange}
-                />
+
+          {/* Produtos */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Produtos / Acessórios
+            </label>
+
+            {/* Itens já adicionados */}
+            {items.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {items.map((item) => (
+                  <div
+                    key={item.product.id}
+                    className="flex items-center gap-2 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{item.product.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {item.product.code} · {formatCurrency(item.product.rentalPrice)} cada
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => changeQty(item.product.id, -1)}
+                        className="rounded p-0.5 text-gray-400 hover:bg-white hover:text-gray-700"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="w-5 text-center text-sm font-semibold text-primary-700">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => changeQty(item.product.id, 1)}
+                        className="rounded p-0.5 text-gray-400 hover:bg-white hover:text-primary-600"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.product.id)}
+                      className="rounded p-0.5 text-gray-300 hover:text-red-500"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Buscador para adicionar novo item */}
+            <div className="space-y-2">
+              <Input
+                label=""
+                placeholder="Buscar produto ou acessório..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+              />
+              {productOptions.length > 0 && productSearch.length > 0 && (
+                <div className="rounded-lg border border-gray-200 bg-white shadow-sm divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                  {productOptions.map((opt) => {
+                    const prod = productsData?.data.find((p) => p.id === opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => prod && addItem(prod)}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-primary-50 flex items-center justify-between gap-2"
+                      >
+                        <span className="text-gray-800">{opt.label}</span>
+                        <Plus className="h-3.5 w-3.5 text-primary-500 flex-shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-            />
+              {productSearch.length > 0 && productOptions.length === 0 && (
+                <p className="text-xs text-gray-400 italic">Nenhum produto disponível encontrado.</p>
+              )}
+            </div>
+
+            {items.length === 0 && (
+              <p className="mt-2 text-xs text-red-500">Adicione ao menos um produto.</p>
+            )}
           </div>
 
           {/* Cliente */}
@@ -303,34 +385,36 @@ export function RentalForm() {
             />
           </div>
 
-          {/* Status de disponibilidade */}
-          {availability !== 'unknown' && (
+          {/* Status disponibilidade */}
+          {calendarAvailability !== 'unknown' && mainProductId && (
             <div
               className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-                availability === 'available'
+                calendarAvailability === 'available'
                   ? 'bg-green-50 text-green-700'
-                  : availability === 'conflict'
+                  : calendarAvailability === 'conflict'
                     ? 'bg-red-50 text-red-700'
                     : 'bg-gray-50 text-gray-500'
               }`}
             >
-              {availability === 'available' && (
-                <>
-                  <CheckCircle2 className="h-4 w-4" /> Período disponível
-                </>
+              {calendarAvailability === 'available' && (
+                <><CheckCircle2 className="h-4 w-4" /> Período disponível</>
               )}
-              {availability === 'conflict' && (
-                <>
-                  <AlertTriangle className="h-4 w-4" /> Conflito de datas neste
-                  período
-                </>
+              {calendarAvailability === 'conflict' && (
+                <><AlertTriangle className="h-4 w-4" /> Conflito de datas neste período</>
               )}
-              {availability === 'checking' && 'Verificando disponibilidade...'}
+              {calendarAvailability === 'checking' && 'Verificando disponibilidade...'}
             </div>
           )}
 
           {/* Valores */}
           <div className="grid grid-cols-1 gap-3">
+            {items.length > 0 && (
+              <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                Soma dos produtos: {formatCurrency(
+                  items.reduce((s, i) => s + Number(i.product.rentalPrice) * i.quantity, 0)
+                )}
+              </div>
+            )}
             <Input
               label="Valor total (R$)"
               type="number"
@@ -365,93 +449,53 @@ export function RentalForm() {
             />
           </div>
 
-          {/* Acessórios */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Acessórios incluídos
-            </label>
-            {accessoriesData.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">
-                Nenhum acessório cadastrado. Acesse o menu <strong className="font-medium text-gray-500">Acessórios</strong> para cadastrar itens como gravata, camisa, suspensório...
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {accessoriesData.map((acc) => {
-                  const qty = selectedAccessories[acc.id] ?? 0;
-                  return (
-                    <div
-                      key={acc.id}
-                      className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
-                    >
-                      <span className="text-sm text-gray-800">{acc.name}</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedAccessories((prev) => ({
-                              ...prev,
-                              [acc.id]: Math.max(0, (prev[acc.id] ?? 0) - 1),
-                            }))
-                          }
-                          disabled={qty === 0}
-                          className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-                        >
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        <span className={`w-5 text-center text-sm font-semibold ${qty > 0 ? 'text-primary-600' : 'text-gray-400'}`}>
-                          {qty}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedAccessories((prev) => ({
-                              ...prev,
-                              [acc.id]: (prev[acc.id] ?? 0) + 1,
-                            }))
-                          }
-                          className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
           <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(-1)}
-            >
+            <Button type="button" variant="outline" onClick={() => navigate(-1)}>
               Cancelar
             </Button>
             <Button
               type="submit"
               loading={mutation.isLoading}
-              disabled={availability === 'conflict'}
+              disabled={calendarAvailability === 'conflict'}
             >
               Criar locação
             </Button>
           </div>
         </div>
 
-        {/* Coluna direita - mini-calendário */}
+        {/* Coluna direita - calendário */}
         <div className="space-y-4">
-          {selectedProduct && (
+          {mainProduct && (
             <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-              <p className="text-sm font-medium text-gray-900">
-                {selectedProduct.name}
-              </p>
-              <p className="text-sm text-primary-600">
-                {formatCurrency(selectedProduct.rentalPrice)} /locação
-              </p>
+              <p className="text-sm font-medium text-gray-900">{mainProduct.name}</p>
+              <p className="text-sm text-primary-600">{formatCurrency(mainProduct.rentalPrice)} /locação</p>
+              {items.length > 1 && (
+                <p className="mt-1 text-xs text-gray-400">
+                  Calendário mostrando disponibilidade deste produto. Clique para alternar.
+                </p>
+              )}
+              {items.length > 1 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {items.map((i) => (
+                    <button
+                      key={i.product.id}
+                      type="button"
+                      onClick={() => setMainProductId(i.product.id)}
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition ${
+                        i.product.id === mainProductId
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {i.product.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-          {productId ? (
+
+          {mainProductId ? (
             <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
               <p className="mb-3 text-xs text-gray-500">
                 {!pickupDate
@@ -461,7 +505,7 @@ export function RentalForm() {
                     : 'Período selecionado. Clique novamente para refazer.'}
               </p>
               <ProductCalendar
-                productId={productId}
+                productId={mainProductId}
                 onDateClick={handleCalendarSelect}
                 selectedStart={pickupDate}
                 selectedEnd={returnDate}
@@ -469,7 +513,7 @@ export function RentalForm() {
             </div>
           ) : (
             <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white text-sm text-gray-400">
-              Selecione um produto para ver a disponibilidade
+              Adicione um produto para ver a disponibilidade
             </div>
           )}
         </div>

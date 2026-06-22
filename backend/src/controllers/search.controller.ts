@@ -53,15 +53,15 @@ export async function search(req: Request, res: Response): Promise<void> {
         OR: [
           { customer: { name: { contains: raw, mode: 'insensitive' } } },
           ...(digits ? [{ customer: { cpf: { contains: digits } } }] : []),
-          { product: { name: { contains: raw, mode: 'insensitive' } } },
-          { product: { code: { contains: raw, mode: 'insensitive' } } },
+          { items: { some: { product: { name: { contains: raw, mode: 'insensitive' } } } } },
+          { items: { some: { product: { code: { contains: raw, mode: 'insensitive' } } } } },
         ],
       },
       take: RESULT_LIMIT,
       orderBy: { pickupDate: 'desc' },
       include: {
         customer: { select: { id: true, name: true } },
-        product: { select: { id: true, code: true, name: true } },
+        items: { include: { product: { select: { id: true, code: true, name: true } } }, take: 1 },
       },
     }),
   ]);

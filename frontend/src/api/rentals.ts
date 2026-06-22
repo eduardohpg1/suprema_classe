@@ -11,13 +11,13 @@ export interface RentalFilters {
   search?: string;
 }
 
-export interface RentalAccessoryItem {
-  accessoryId: string;
-  quantity: number;
+export interface RentalItemPayload {
+  productId: string;
+  quantity?: number;
 }
 
 export interface RentalPayload {
-  productId: string;
+  items: RentalItemPayload[];
   customerId: string;
   pickupDate: string;
   returnDate: string;
@@ -25,7 +25,6 @@ export interface RentalPayload {
   depositValue: number;
   remainingValue: number;
   notes?: string;
-  accessories?: RentalAccessoryItem[];
 }
 
 export async function getRentals(

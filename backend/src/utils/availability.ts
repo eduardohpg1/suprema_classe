@@ -12,20 +12,7 @@ export const BLOCKING_RENTAL_STATUSES: RentalStatus[] = [
 
 /**
  * Verifica se um produto esta disponivel para locacao no intervalo informado.
- *
- * Considera conflito qualquer locacao em status bloqueante (ACTIVE/OVERDUE)
- * cujo intervalo [pickupDate, returnDate] sobreponha o intervalo solicitado.
- *
- * Regra de overlap (intervalos fechados):
- *   existeConflito = existing.pickupDate <= novo.returnDate
- *                 && existing.returnDate >= novo.pickupDate
- *
- * @param productId       Produto a verificar.
- * @param pickupDate      Data de retirada solicitada.
- * @param returnDate      Data de devolucao solicitada.
- * @param excludeRentalId Locacao a ignorar (usado em updates para nao colidir consigo mesma).
- * @param client          Cliente Prisma opcional (passe o tx dentro de uma transacao).
- * @returns true se disponivel, false se houver conflito.
+ * Usa RentalItem para verificar conflitos (suporte a multiplos produtos por locacao).
  */
 export async function checkProductAvailability(
   productId: string,
@@ -35,21 +22,20 @@ export async function checkProductAvailability(
   client: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<boolean> {
   if (returnDate < pickupDate) {
-    // Intervalo invalido nunca pode estar "disponivel".
     return false;
   }
 
-  const conflict = await client.rental.findFirst({
+  const conflict = await client.rentalItem.findFirst({
     where: {
       productId,
-      status: { in: BLOCKING_RENTAL_STATUSES },
-      ...(excludeRentalId ? { id: { not: excludeRentalId } } : {}),
-      // Overlap: existente comeca antes (ou no dia) do fim solicitado
-      // E existente termina depois (ou no dia) do inicio solicitado.
-      AND: [
-        { pickupDate: { lte: returnDate } },
-        { returnDate: { gte: pickupDate } },
-      ],
+      rental: {
+        status: { in: BLOCKING_RENTAL_STATUSES },
+        ...(excludeRentalId ? { id: { not: excludeRentalId } } : {}),
+        AND: [
+          { pickupDate: { lte: returnDate } },
+          { returnDate: { gte: pickupDate } },
+        ],
+      },
     },
     select: { id: true },
   });
@@ -58,8 +44,7 @@ export async function checkProductAvailability(
 }
 
 /**
- * Erro de dominio lancado quando ha conflito de datas. Capturado pelo errorHandler
- * e convertido em HTTP 409.
+ * Erro de dominio lancado quando ha conflito de datas.
  */
 export class AvailabilityConflictError extends Error {
   public readonly statusCode = 409;
