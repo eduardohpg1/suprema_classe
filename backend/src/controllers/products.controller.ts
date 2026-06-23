@@ -118,9 +118,14 @@ export async function createProduct(req: Request, res: Response): Promise<void> 
     throw new AppError(400, 'Categoria informada nao existe.');
   }
 
+  // Gera codigo unico automatico quando nao informado
+  const finalCode = data.code?.trim()
+    ? data.code.trim()
+    : `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
   const product = await prisma.product.create({
     data: {
-      code: data.code,
+      code: finalCode,
       name: data.name,
       categoryId: data.categoryId,
       size: data.size,
