@@ -16,10 +16,26 @@
     line-height: 1.6;
   }
 
-  /* Dark mode body */
-  .dark body {
+  .dark body,
+  .dark {
     @apply bg-gray-950 text-gray-100;
   }
+
+  /* Inverte textos escuros para ficarem legíveis no dark mode */
+  .dark .text-gray-900 { color: rgb(243 244 246) !important; }
+  .dark .text-gray-800 { color: rgb(229 231 235) !important; }
+  .dark .text-gray-700 { color: rgb(209 213 219) !important; }
+  .dark .text-gray-600 { color: rgb(156 163 175) !important; }
+  .dark .text-gray-500 { color: rgb(107 114 128) !important; }
+
+  /* Fundos brancos viram escuros */
+  .dark .bg-white { background-color: rgb(17 24 39) !important; }
+  .dark .bg-gray-50 { background-color: rgb(17 24 39) !important; }
+  .dark .bg-gray-100 { background-color: rgb(31 41 55) !important; }
+
+  /* Bordas */
+  .dark .border-gray-100 { border-color: rgb(55 65 81) !important; }
+  .dark .border-gray-200 { border-color: rgb(55 65 81) !important; }
 
   /* Aumenta fonte base para legibilidade (pessoas de mais idade) */
   input, textarea, select, button {
