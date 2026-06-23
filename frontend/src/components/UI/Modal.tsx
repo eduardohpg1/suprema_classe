@@ -44,26 +44,26 @@ export function Modal({
         aria-hidden
       />
       <div
-        className={`relative z-10 w-full ${sizes[size]} max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl`}
+        className={`relative z-10 w-full ${sizes[size]} max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl`}
         role="dialog"
         aria-modal="true"
       >
         {title && (
-          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
             <button
               onClick={onClose}
-              className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
         )}
-        <div className="scrollbar-thin max-h-[60vh] overflow-y-auto px-6 py-4">
+        <div className="scrollbar-thin max-h-[60vh] overflow-y-auto px-6 py-4 text-gray-700 dark:text-gray-300">
           {children}
         </div>
         {footer && (
-          <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+          <div className="flex justify-end gap-3 border-t border-gray-100 dark:border-gray-800 px-6 py-4">
             {footer}
           </div>
         )}

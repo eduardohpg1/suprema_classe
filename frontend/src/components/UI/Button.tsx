@@ -15,10 +15,10 @@ const variants: Record<Variant, string> = {
   primary:
     'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 shadow-sm',
   secondary:
-    'bg-gray-800 text-white hover:bg-gray-900 focus:ring-gray-600 shadow-sm',
+    'bg-gray-800 text-white hover:bg-gray-900 focus:ring-gray-600 shadow-sm dark:bg-gray-700 dark:hover:bg-gray-600',
   outline:
-    'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-primary-500',
-  ghost: 'text-gray-600 hover:bg-gray-100 focus:ring-gray-400',
+    'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-primary-500',
+  ghost: 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus:ring-gray-400',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-sm',
 };
 
