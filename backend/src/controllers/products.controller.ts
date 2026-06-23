@@ -10,7 +10,7 @@ import { buildPublicUrl, deleteUploadFile } from '../middleware/upload';
 const PRODUCT_STATUSES = ['AVAILABLE', 'RESERVED', 'RENTED', 'MAINTENANCE'] as const;
 
 const createProductSchema = z.object({
-  code: z.string().min(1, 'Codigo obrigatorio.').max(50),
+  code: z.string().max(50).optional().default(''),
   name: z.string().min(2, 'Nome muito curto.').max(150),
   categoryId: z.string().min(1, 'Categoria obrigatoria.'),
   size: z.string().min(1, 'Tamanho obrigatorio.').max(20),

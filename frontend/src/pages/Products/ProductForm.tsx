@@ -24,7 +24,7 @@ import { productStatusConfig } from '../../lib/statusConfig';
 
 const schema = z.object({
   name: z.string().min(2, 'Informe o nome do produto'),
-  code: z.string().min(1, 'Informe o código'),
+  code: z.string().optional(),
   categoryId: z.string().min(1, 'Selecione uma categoria'),
   size: z.string().min(1, 'Informe o tamanho'),
   color: z.string().min(1, 'Informe a cor'),
@@ -88,7 +88,7 @@ export function ProductForm() {
     async (values: FormValues) => {
       const payload: ProductPayload = {
         name: values.name,
-        code: values.code,
+        code: values.code || '',
         categoryId: values.categoryId,
         size: values.size,
         color: values.color,
@@ -177,7 +177,7 @@ export function ProductForm() {
             {...register('name')}
           />
           <Input
-            label="Código"
+            label="Código — opcional"
             error={errors.code?.message}
             {...register('code')}
           />
